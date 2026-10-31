@@ -26,3 +26,8 @@ app/src-tauri/sidecar/*
 app/node_modules/
 app/dist/
 app/src-tauri/target/
+
+# Promo video render outputs and frame temp dirs (see marketing/video/render.py)
+marketing/out/
+marketing/**/frames/
+marketing/**/_frames/

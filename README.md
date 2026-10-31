@@ -7,6 +7,16 @@ hidden Chrome over the DevTools Protocol (Zendriver) instead of calling the API,
 SQLite database, and lets you search, filter and export it. The same scraper core is also available as a
 command-line tool.
 
+<p align="center">
+  <a href="docs/media/ghost-scraper-promo.mp4">
+    <img src="docs/media/ghost-scraper-promo.gif" width="400"
+         alt="22-second promo: queries and filters, live browser tiles, shared Chrome contexts, search and filter, JSON and CSV export, free download">
+  </a>
+  <br>
+  <sub><a href="docs/media/ghost-scraper-promo.mp4">Watch the full-quality video (MP4)</a> ·
+  <a href="https://github.com/abhishekairan/Branch-Scrapper/releases/tag/v0.1.0">Download v0.1.0</a></sub>
+</p>
+
 ![Run screen: two search queries, the exact query strings sent to GitHub and a time estimate](docs/screenshots/run.png)
 
 ![Run screen during a scrape: progress bar, per-worker status, latest saved repositories and log](docs/screenshots/run-progress.png)
