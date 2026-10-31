@@ -119,27 +119,27 @@ class AppDataDirTests(unittest.TestCase):
     def test_windows_uses_appdata(self):
         self._env(APPDATA="C:/Users/me/AppData/Roaming")
         with patch.object(config_mod.sys, "platform", "win32"):
-            self.assertEqual(app_data_dir(), Path("C:/Users/me/AppData/Roaming") / "GhostScraper")
+            self.assertEqual(app_data_dir(), Path("C:/Users/me/AppData/Roaming") / "BranchScrapper")
 
     def test_windows_falls_back_to_home_roaming(self):
         self._env(APPDATA=None)
         with patch.object(config_mod.sys, "platform", "win32"):
-            self.assertEqual(app_data_dir(), Path.home() / "AppData" / "Roaming" / "GhostScraper")
+            self.assertEqual(app_data_dir(), Path.home() / "AppData" / "Roaming" / "BranchScrapper")
 
     def test_macos_application_support(self):
         self._env()
         with patch.object(config_mod.sys, "platform", "darwin"):
-            self.assertEqual(app_data_dir(), Path.home() / "Library" / "Application Support" / "GhostScraper")
+            self.assertEqual(app_data_dir(), Path.home() / "Library" / "Application Support" / "BranchScrapper")
 
     def test_linux_xdg_data_home(self):
         self._env(XDG_DATA_HOME="/data/xdg")
         with patch.object(config_mod.sys, "platform", "linux"):
-            self.assertEqual(app_data_dir(), Path("/data/xdg") / "ghostscraper")
+            self.assertEqual(app_data_dir(), Path("/data/xdg") / "branchscrapper")
 
     def test_linux_default_local_share(self):
         self._env(XDG_DATA_HOME=None)
         with patch.object(config_mod.sys, "platform", "linux"):
-            self.assertEqual(app_data_dir(), Path.home() / ".local" / "share" / "ghostscraper")
+            self.assertEqual(app_data_dir(), Path.home() / ".local" / "share" / "branchscrapper")
 
     def test_does_not_create_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

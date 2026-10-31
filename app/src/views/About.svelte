@@ -79,7 +79,7 @@
       <header>Support development</header>
       <div class="body stack">
         <p class="muted">
-          Ghost Scraper is free and has no ads or tracking. If it saves you time, you can chip in; it is entirely
+          Branch Scrapper is free and has no ads or tracking. If it saves you time, you can chip in; it is entirely
           optional.
         </p>
         <div class="row wrap">

@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Ghost Scraper",
-  "version": "0.1.0",
-  "identifier": "com.ghostscraper.desktop",
+  "productName": "Branch Scrapper",
+  "version": "0.1.1",
+  "identifier": "com.branchscrapper.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Ghost Scraper",
+        "title": "Branch Scrapper",
         "width": 1360,
         "height": 860,
         "minWidth": 1000,
@@ -48,7 +48,8 @@
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerHooks": "installer-hooks.nsh"
       }
     }
   }

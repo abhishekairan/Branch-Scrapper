@@ -1,0 +1,28 @@
+{
+  "_note": "Single source of truth for video timing. app.js (scene cuts + highlight times) and audio.py (music + SFX) both read this file. All times are in BEATS; events are relative to the start of their scene. 1 beat = 60 / bpm seconds.",
+  "bpm": 128,
+  "fps": 30,
+  "drop_beat": 6,
+  "scenes": [
+    { "id": "hook",     "beats": 6, "trans": null },
+    { "id": "reveal",   "beats": 6, "trans": "curtainUp" },
+    { "id": "run",      "beats": 5, "trans": "pushLeft" },
+    { "id": "browsers", "beats": 6, "trans": "iris" },
+    { "id": "ram",      "beats": 5, "trans": "curtainLeft" },
+    { "id": "data",     "beats": 6, "trans": "zoom" },
+    { "id": "export",   "beats": 4, "trans": "pushUp" },
+    { "id": "ticker",   "beats": 4, "trans": "curtainRight" },
+    { "id": "cta",      "beats": 7, "trans": "iris" }
+  ],
+  "events": {
+    "hook":     { "strike": 3.5 },
+    "reveal":   { "icon": 0.25, "chip": 2.0 },
+    "run":      { "box1": 1.25, "box2": 3.5 },
+    "browsers": { "tiles": [0.75, 1.25, 1.75], "zoom": 3.0, "status": 4.5 },
+    "ram":      { "bar1": 1.0, "bar2": 1.5, "badge": 3.0, "foot": 3.5 },
+    "data":     { "lines": [0.25, 2.0, 4.0], "box1": 1.0, "box2": 3.0, "box3": 4.5, "flip": 5.0, "chip": 5.5 },
+    "export":   { "box": 1.0, "card1": 1.5, "card2": 2.0 },
+    "ticker":   { "rows": [0.25, 1.0, 1.75, 2.5] },
+    "cta":      { "hit": 0.0, "dl": 0.5, "url": 0.75, "chips": [1.0, 1.25, 1.5] }
+  }
+}

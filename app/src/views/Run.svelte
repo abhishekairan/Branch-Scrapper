@@ -7,7 +7,9 @@
     cfg,
     clock,
     conn,
+    dismissMigrationNotice,
     errorsFor,
+    migrationNotice,
     previewCounts,
     recent,
     recheckBrowsers,
@@ -235,6 +237,26 @@
                 >
               {/each}
               <button class="btn ghost sm" onclick={recheckBrowsers}>Check again</button>
+            </div>
+          </div>
+        </div>
+      {/if}
+      {#if migrationNotice.visible}
+        <div class="body tight">
+          <div class="msg browser-issue" class:warn={migrationNotice.failed !== ''} class:info={migrationNotice.failed === ''} role="status">
+            <div>
+              {#if migrationNotice.failed}
+                <strong>Your data could not be moved from Ghost Scraper.</strong>
+                Branch Scrapper started with an empty data folder; your old data is untouched in the Ghost Scraper folder
+                ({migrationNotice.failed}).
+              {:else}
+                <strong>Your data was moved from Ghost Scraper.</strong>
+                It was copied to {conn.dataDir || 'the Branch Scrapper data folder'}. The old Ghost Scraper folder was left in
+                place (it contains a MIGRATED_TO.txt note) and is safe to delete once you have checked everything is here.
+              {/if}
+            </div>
+            <div class="row">
+              <button class="btn ghost sm" onclick={dismissMigrationNotice}>Dismiss</button>
             </div>
           </div>
         </div>

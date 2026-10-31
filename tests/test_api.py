@@ -170,7 +170,9 @@ class AuthTests(ApiTestCase):
 
     async def test_valid_token(self):
         c = await self.client()
-        self.assertEqual((await c.ok("app.info"))["pid"], os.getpid())
+        info = await c.ok("app.info")
+        self.assertEqual(info["pid"], os.getpid())
+        self.assertEqual(info["migration"], "none")
 
     async def test_wrong_token(self):
         await self._expect_4401(json.dumps({"type": "auth", "token": "x" * 40}))

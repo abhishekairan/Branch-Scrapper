@@ -1,5 +1,7 @@
 # Plan: GitHub Ghost Scraper → cross-platform desktop app (Tauri)
 
+> Product renamed to Branch Scrapper in v0.1.1.
+
 Status: **draft v2 for review** (2026-11-01). Nothing here is implemented yet.
 Snapshot of the CLI before this work: branch `snapshot/cli-v1` (commit `3011c29`).
 

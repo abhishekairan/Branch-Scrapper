@@ -29,5 +29,7 @@ app/src-tauri/target/
 
 # Promo video render outputs and frame temp dirs (see marketing/video/render.py)
 marketing/out/
+# Private launch copy (not part of the project)
+marketing/posts.md
 marketing/**/frames/
 marketing/**/_frames/

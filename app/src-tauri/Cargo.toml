@@ -1,7 +1,7 @@
 [package]
-name = "ghost-scraper"
-version = "0.1.0"
-description = "GitHub Ghost Scraper desktop shell"
+name = "branch-scrapper"
+version = "0.1.1"
+description = "Branch Scrapper desktop shell"
 authors = ["Abhishek Airan"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/abhishekairan/Branch-Scrapper"
@@ -9,7 +9,7 @@ edition = "2024"
 rust-version = "1.90"
 
 [lib]
-name = "ghost_scraper_lib"
+name = "branch_scrapper_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

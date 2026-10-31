@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for the Ghost Scraper sidecar. Build with packaging/build_sidecar.py (not by hand).
+# PyInstaller spec for the Branch Scrapper sidecar. Build with packaging/build_sidecar.py (not by hand).
 #
 # onedir, not onefile: onefile unpacks ~100 MB to %TEMP% on every launch (seconds of startup) and runs a
 # bootloader *parent* process, which is a classic antivirus false-positive trigger and would sit between
@@ -55,7 +55,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,      # onedir
-    name="ghscraper-sidecar",
+    name="branch-scrapper-sidecar",
     debug=False,
     strip=False,
     upx=False,                  # UPX-packed binaries trigger antivirus heuristics
@@ -69,5 +69,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="ghscraper-sidecar",
+    name="branch-scrapper-sidecar",
 )

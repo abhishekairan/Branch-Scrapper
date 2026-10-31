@@ -152,6 +152,8 @@ export interface AppInfo {
   /** running from the packaged (PyInstaller) build */
   frozen: boolean
   browser: BrowserStatus
+  /** data copied from the pre-rename app at startup: 'none' | 'migrated' | 'skipped-existing' | 'failed: …' */
+  migration: string
 }
 
 export type WorkerState =

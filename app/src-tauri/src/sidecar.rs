@@ -407,9 +407,9 @@ fn resolve_command(_app: &AppHandle) -> Result<Spec, String> {
 #[cfg(not(debug_assertions))]
 fn resolve_command(app: &AppHandle) -> Result<Spec, String> {
     // The PyInstaller onedir build is shipped as bundle resources (tauri.conf.json > bundle > resources):
-    // <resource dir>/sidecar/ghscraper-sidecar.exe plus its _internal folder. No env override in release
+    // <resource dir>/sidecar/branch-scrapper-sidecar.exe plus its _internal folder. No env override in release
     // builds: the program to run must not be steerable from the environment.
-    let exe_name = if cfg!(windows) { "ghscraper-sidecar.exe" } else { "ghscraper-sidecar" };
+    let exe_name = if cfg!(windows) { "branch-scrapper-sidecar.exe" } else { "branch-scrapper-sidecar" };
     let dir = app
         .path()
         .resource_dir()

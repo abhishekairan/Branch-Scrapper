@@ -83,6 +83,29 @@ export const conn = $state({
   browsersFound: null as BrowserStatus['found'] | null,
 })
 
+// One-time notice after the data of the pre-rename app (Ghost Scraper) was copied at startup. The first sighting
+// is remembered ('seen'), so it stays until dismissed even across restarts; storage failures just mean it may reappear.
+type NoticeState = 'unseen' | 'seen' | 'dismissed'
+const MIGRATION_KEY = 'bs.migrationNotice'
+export const migrationNotice = $state({ visible: false, failed: '' })
+
+function applyMigration(status: string): void {
+  const stored = load<NoticeState>(MIGRATION_KEY, ['unseen', 'seen', 'dismissed'], 'unseen')
+  const failed = status.startsWith('failed')
+  migrationNotice.failed = failed ? status.replace(/^failed:\s*/, '') : ''
+  if (stored === 'dismissed') {
+    migrationNotice.visible = false
+    return
+  }
+  if (status === 'migrated' && stored === 'unseen') save(MIGRATION_KEY, 'seen')
+  migrationNotice.visible = failed || status === 'migrated' || stored === 'seen'
+}
+
+export function dismissMigrationNotice(): void {
+  save(MIGRATION_KEY, 'dismissed')
+  migrationNotice.visible = false
+}
+
 /** Ask the backend again which browsers are installed (after the user installed one). */
 export async function recheckBrowsers(): Promise<void> {
   try {
@@ -617,6 +640,7 @@ async function onOpen(): Promise<void> {
     conn.maxBrowsers = info.max_browsers
     conn.version = info.version
     conn.browsersFound = info.browser.found
+    applyMigration(info.migration)
     await loadConfig()
     await syncRunStatus()
   } catch (e) {

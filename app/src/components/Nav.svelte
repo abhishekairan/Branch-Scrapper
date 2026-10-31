@@ -20,7 +20,7 @@
       <circle cx="12.8" cy="14" r="1.8" fill="var(--accent)" />
       <circle cx="19.2" cy="14" r="1.8" fill="var(--accent)" />
     </svg>
-    <span>Ghost Scraper</span>
+    <span>Branch Scrapper</span>
   </div>
 
   <ul>

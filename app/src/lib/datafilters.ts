@@ -448,11 +448,11 @@ export function stringList(v: unknown): string[] {
   return Array.isArray(v) ? v.map(String) : []
 }
 
-/** Default file name for an export, e.g. `ghost-scraper-filtered-2026-11-01.csv`. */
+/** Default file name for an export, e.g. `branch-scrapper-filtered-2026-11-01.csv`. */
 export function exportFileName(scope: ExportScope, format: ExportFormat, today: Date = new Date()): string {
   const d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   const name = scope === 'view' ? 'filtered' : scope === 'selected' ? 'selected' : 'all'
-  return `ghost-scraper-${name}-${d}.${format}`
+  return `branch-scrapper-${name}-${d}.${format}`
 }
 
 export type ExportScope = 'view' | 'selected' | 'all'

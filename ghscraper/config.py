@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import sqlite3
 import sys
 from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,11 +126,14 @@ def parse_queries(text: str) -> list[str]:
     return split_queries(text)
 
 
-def app_data_dir(app_name: str = "GhostScraper") -> Path:
-    """Per-user data directory for the app. Does not create it."""
-    override = os.environ.get("GHOSTSCRAPER_HOME")
-    if override:
-        return Path(override)
+APP_DIR_NAME = "BranchScrapper"
+LEGACY_APP_DIR_NAME = "GhostScraper"     # the product was called "Ghost Scraper" up to v0.1.0
+MIGRATED_MARKER = "MIGRATED_TO.txt"
+HOME_ENV = "GHOSTSCRAPER_HOME"           # env var name kept across the rename
+
+
+def _default_data_dir(app_name: str) -> Path:
+    """The OS-conventional location for `app_name`, ignoring any override. Does not create it."""
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
         return Path(base) / app_name
@@ -135,3 +141,105 @@ def app_data_dir(app_name: str = "GhostScraper") -> Path:
         return Path.home() / "Library" / "Application Support" / app_name
     xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(xdg) / app_name.lower()
+
+
+def app_data_dir(app_name: str = APP_DIR_NAME) -> Path:
+    """Per-user data directory for the app. Does not create it."""
+    override = os.environ.get(HOME_ENV)
+    if override:
+        return Path(override)
+    return _default_data_dir(app_name)
+
+
+def legacy_data_dir() -> Path:
+    """Where the app (then called Ghost Scraper) kept its data up to v0.1.0."""
+    return _default_data_dir(LEGACY_APP_DIR_NAME)
+
+
+def _is_nonempty_dir(p: Path) -> bool:
+    try:
+        return p.is_dir() and any(p.iterdir())
+    except OSError:
+        return False
+
+
+def _checkpoint_legacy_db(db: Path, log) -> None:
+    """Fold a WAL into the main file so that the copy is consistent. Errors are logged, never raised."""
+    if not db.is_file():
+        return
+    try:
+        con = sqlite3.connect(f"{db.resolve().as_uri()}?mode=rw", uri=True, timeout=5)
+        try:
+            con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        log.warning("legacy data migration: WAL checkpoint of %s failed (%s); copying the -wal/-shm files too", db, e)
+
+
+def migrate_legacy_data_dir(new: Path, log) -> str:
+    """One-time copy of the pre-rename data directory (Ghost Scraper) to `new`.
+
+    Never moves or deletes anything in the legacy directory; a failure leaves it untouched and the caller
+    simply starts with a fresh `new`. `log` is anything with info/warning/error (a logging.Logger).
+    Returns "none" (nothing to do), "migrated", "skipped-existing" (`new` already holds data) or
+    "failed: <reason>". With GHOSTSCRAPER_HOME set no migration happens (the user picked the folder).
+    """
+    try:
+        if os.environ.get(HOME_ENV):
+            return "none"
+        legacy = legacy_data_dir()
+        if not _is_nonempty_dir(legacy) or legacy.resolve() == new.resolve():
+            return "none"
+        if _is_nonempty_dir(new):
+            log.info("legacy data migration: %s already has data, leaving %s alone", new, legacy)
+            return "skipped-existing"
+        if new.exists() and not new.is_dir():
+            return f"failed: {new} exists and is not a directory"
+        if (legacy / MIGRATED_MARKER).exists():
+            log.info("legacy data migration: %s was already migrated once; not copying again", legacy)
+            return "none"
+
+        log.info("legacy data migration: copying %s -> %s", legacy, new)
+        _checkpoint_legacy_db(legacy / "data.db", log)
+        new.parent.mkdir(parents=True, exist_ok=True)
+        tmp = new.with_name(f"{new.name}.migrating-{os.getpid()}")
+        try:
+            if tmp.exists():                       # leftover of an earlier crash of this very pid
+                shutil.rmtree(tmp)
+            shutil.copytree(legacy, tmp)           # copy, never move: the legacy tree stays as it was
+            # Another sidecar may have won the race while we were copying. Look again just before the rename
+            # and never clobber: an empty `new` is removed first (Windows cannot rename onto an existing
+            # directory), a non-empty one means somebody else finished first.
+            if _is_nonempty_dir(new):
+                shutil.rmtree(tmp, ignore_errors=True)
+                log.info("legacy data migration: %s appeared meanwhile; discarding our copy", new)
+                return "skipped-existing"
+            if new.is_dir():
+                os.rmdir(new)
+            try:
+                os.rename(tmp, new)                # atomic on one volume; fails if `new` exists again
+            except OSError:
+                if _is_nonempty_dir(new) or new.exists():
+                    shutil.rmtree(tmp, ignore_errors=True)
+                    log.info("legacy data migration: %s appeared meanwhile; discarding our copy", new)
+                    return "skipped-existing"
+                raise
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+
+        try:
+            (legacy / MIGRATED_MARKER).write_text(
+                f"Your Ghost Scraper data was copied to:\n{new}\n\n"
+                f"Copied at: {datetime.now().astimezone().isoformat(timespec='seconds')}\n\n"
+                "This folder is the old Ghost Scraper location and is no longer used by Branch Scrapper.\n"
+                "It is safe to delete after you have checked Branch Scrapper.\n",
+                encoding="utf-8")
+        except OSError as e:
+            log.warning("legacy data migration: could not write %s into %s (%s)", MIGRATED_MARKER, legacy, e)
+        log.info("legacy data migration: done")
+        return "migrated"
+    except Exception as e:   # the app must still start, with a fresh data directory
+        log.error("legacy data migration failed: %s: %s", type(e).__name__, e)
+        return f"failed: {type(e).__name__}: {e}"

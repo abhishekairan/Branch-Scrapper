@@ -2,6 +2,30 @@
 
 All notable changes are documented here. Format loosely follows Keep a Changelog; versions follow SemVer.
 
+## [0.1.1] - Unreleased
+
+### Changed
+- **The product is now called Branch Scrapper** (it was "Ghost Scraper" in v0.1.0). New window title, installer
+  name (`Branch Scrapper_0.1.1_x64-setup.exe`), executable (`branch-scrapper.exe`), sidecar
+  (`branch-scrapper-sidecar.exe`), app identifier (`com.branchscrapper.desktop`) and default data folder
+  (`%APPDATA%\BranchScrapper`). The Python package (`ghscraper`) and the `GHOSTSCRAPER_*` environment variable
+  names are unchanged.
+- Exported file names are now `branch-scrapper-<scope>-<date>.<json|csv>`.
+
+### Added
+- **Data migration:** on first start the sidecar copies `%APPDATA%\GhostScraper` to `%APPDATA%\BranchScrapper`
+  (copy only, SQLite WAL checkpointed first, atomic rename, nothing deleted; a `MIGRATED_TO.txt` note is left
+  in the old folder). A one-time dismissible notice on the Run screen reports it; `app.info` has a new
+  `migration` field. Not done when `GHOSTSCRAPER_HOME` or `--data-dir` is set.
+- **Installer upgrade:** the installer silently uninstalls a per-user Ghost Scraper installation before
+  installing (`bundle.windows.nsis.installerHooks`), keeping its data.
+
+- Promo video with a synthesized soundtrack (`marketing/video/`), embedded in the README.
+
+### Known changes
+- The new app identifier gives the app a new WebView2 profile, so UI preferences kept in the browser storage
+  (for example the Browsers layout) are reset once.
+
 ## [0.1.0] - Unreleased (first public release)
 
 First desktop release. Builds on the earlier command-line scraper (SeleniumBase UC mode).

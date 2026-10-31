@@ -3,7 +3,7 @@
     .venv\\Scripts\\python.exe packaging\\build_sidecar.py
 
 Output:
-  build/sidecar-dist/ghscraper-sidecar/      PyInstaller onedir result (git-ignored)
+  build/sidecar-dist/branch-scrapper-sidecar/  PyInstaller onedir result (git-ignored)
   app/src-tauri/sidecar/                     the same files staged for `tauri build` (git-ignored except README.txt;
                                              see tauri.conf.json bundle.resources)
 """
@@ -15,11 +15,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SPEC = ROOT / "packaging" / "ghscraper-sidecar.spec"
+SPEC = ROOT / "packaging" / "branch-scrapper-sidecar.spec"
 WORK = ROOT / "build" / "pyinstaller"
 DIST = ROOT / "build" / "sidecar-dist"
 STAGE = ROOT / "app" / "src-tauri" / "sidecar"
-NAME = "ghscraper-sidecar"
+NAME = "branch-scrapper-sidecar"
 KEEP = "README.txt"
 
 
@@ -46,7 +46,7 @@ def main() -> int:
         return 1
 
     # Stage the *contents* of the onedir folder into app/src-tauri/sidecar/, so the installed layout is
-    # <resource_dir>/sidecar/ghscraper-sidecar.exe. The tracked README.txt placeholder is kept: Tauri's
+    # <resource_dir>/sidecar/branch-scrapper-sidecar.exe. The tracked README.txt placeholder is kept: Tauri's
     # build script needs the resources glob to match something even in dev builds.
     STAGE.mkdir(parents=True, exist_ok=True)
     for entry in STAGE.iterdir():

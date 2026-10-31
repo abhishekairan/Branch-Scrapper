@@ -1,6 +1,6 @@
 # Third-party notices
 
-Ghost Scraper itself is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
+Branch Scrapper itself is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
 The Windows installer also contains the third-party components listed below, each under its own licence.
 
 How this list was made: licences were read from each package's own metadata (Python: the installed
@@ -52,7 +52,7 @@ Runtime and build tooling:
 | CPython 3.12 (interpreter and standard library, bundled by PyInstaller) | Python Software Foundation License (PSF) |
 | PyInstaller 6.22.3 bootloader (the `ghscraper-sidecar.exe` launcher) | GPL-2.0-or-later with a special exception that allows using PyInstaller to build and distribute non-free programs (wording taken from the package metadata) |
 
-Zendriver is the reason Ghost Scraper is AGPL-3.0: the installer distributes it, so the combined work is
+Zendriver is the reason Branch Scrapper is AGPL-3.0: the installer distributes it, so the combined work is
 offered under the same licence. Its source is available at https://github.com/cdpdriver/zendriver.
 
 ## Desktop shell (Rust, Tauri 2)
@@ -90,5 +90,5 @@ Vite, TypeScript and the other development tools are build-time only and are not
 
 ## Not bundled
 
-Google Chrome, Microsoft Edge or Brave is **not** part of the installer; Ghost Scraper drives a browser that
+Google Chrome, Microsoft Edge or Brave is **not** part of the installer; Branch Scrapper drives a browser that
 is already installed on the user's machine, under that browser's own licence.

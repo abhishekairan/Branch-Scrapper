@@ -3,7 +3,7 @@
 
 import { version } from '../../package.json' // named import so Vite tree-shakes the rest of package.json
 
-export const APP_NAME = 'Ghost Scraper'
+export const APP_NAME = 'Branch Scrapper'
 export const APP_VERSION: string = version
 export const APP_DESCRIPTION = 'Scrape GitHub repository search results with hidden Chrome browsers, then search and export them.'
 export const LICENSE_NAME = 'AGPL-3.0'

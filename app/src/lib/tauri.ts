@@ -25,7 +25,7 @@ export async function getSidecarInfo(): Promise<SidecarInfo> {
     const token = q.get('token')
     if (port > 0 && token) return { port, token, version: 'dev' }
   }
-  throw new Error('not running inside the Ghost Scraper shell')
+  throw new Error('not running inside the Branch Scrapper shell')
 }
 
 /**
@@ -45,7 +45,7 @@ export async function openExternal(url: string): Promise<boolean> {
 
 /** Ask the shell to restart the sidecar (fresh process, fresh token). */
 export function restartSidecar(): Promise<SidecarInfo> {
-  if (!inTauri) return Promise.reject(new Error('not running inside the Ghost Scraper shell'))
+  if (!inTauri) return Promise.reject(new Error('not running inside the Branch Scrapper shell'))
   return invoke<SidecarInfo>('restart_sidecar')
 }
 

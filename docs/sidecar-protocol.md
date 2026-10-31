@@ -19,7 +19,9 @@ GHOSTSCRAPER_TOKEN=<secret, >= 32 chars>  python -m ghscraper.sidecar [--port N]
   (On Windows a venv `python.exe` is a launcher: the `pid` in this line is the real sidecar, not necessarily
   the process you spawned. A PyInstaller build has no such launcher.)
 * Logs: stderr and `<data dir>/logs/sidecar.log` (rotating, 1 MB x 3).
-* Data dir: `--data-dir`, else `GHOSTSCRAPER_HOME`, else the OS app-data dir (`%APPDATA%\GhostScraper`).
+* Data dir: `--data-dir`, else `GHOSTSCRAPER_HOME`, else the OS app-data dir (`%APPDATA%\BranchScrapper`). When the default dir is used (neither
+  `--data-dir` nor `GHOSTSCRAPER_HOME`) and it is missing or empty, the sidecar first copies the pre-rename
+  `%APPDATA%\GhostScraper` into it (`migrate_legacy_data_dir`; copy only, nothing is deleted from the old folder).
   Files: `data.db`, `config.json` (created on first run: copied from the repo-local `config.json` if there is
   one, else defaults; the packaged build never looks for a repo-local file), `logs/`.
 * Exit: clean shutdown (stop the run, close browsers, close the store, close sockets with code 1001) on
@@ -93,7 +95,8 @@ be a string (split on `;`/newline/comma by the CLI rules).
 ## 5. Methods
 
 ### 5.1 App
-* `app.info {}` -> `{version, pid, platform, python, data_dir, db_path, config_path, schema_version, run_active, test_mode, max_browsers, frozen, browser}`;
+* `app.info {}` -> `{version, pid, platform, python, data_dir, db_path, config_path, schema_version, run_active, test_mode, max_browsers, frozen, browser, migration}`;
+  `migration` = result of the startup data copy from Ghost Scraper (<= 0.1.0): `"none"`, `"migrated"`, `"skipped-existing"` or `"failed: <reason>"`;
   `browser` = `{selected, custom_path, path, available, found:{chrome,msedge,brave -> path|null}}` (is a browser installed? `path` is what a run would launch); `frozen` = running from the PyInstaller build (where `--test-mode` is refused)
 * `app.shutdown {}` -> `{ok:true}`; the process begins a clean shutdown ~0.1 s after replying.
 

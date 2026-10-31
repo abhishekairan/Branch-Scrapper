@@ -104,12 +104,12 @@ step('datafilters.ts: pure logic')
   ok(JSON.stringify(nextSort([['stars', 'desc'], ['forks', 'asc']], 'forks', true)) === '[["stars","desc"]]', 'sort: third shift-click removes it')
   ok(normaliseColumns(['stars', 'nope', 'full_name', 'stars'])[0] === 'full_name' && normaliseColumns(['stars', 'nope']).length === 2, 'normaliseColumns')
   ok(relTime('2026-11-01T10:00:00Z', Date.parse('2026-11-03T10:00:00Z')) === '2 days ago', `relTime: ${relTime('2026-11-01T10:00:00Z', Date.parse('2026-11-03T10:00:00Z'))}`)
-  ok(exportFileName('view', 'csv', new Date(2026, 10, 1)) === 'ghost-scraper-filtered-2026-11-01.csv', 'exportFileName')
+  ok(exportFileName('view', 'csv', new Date(2026, 10, 1)) === 'branch-scrapper-filtered-2026-11-01.csv', 'exportFileName')
 }
 
 // ------------------------------------------------------------------ start the sidecar
 const token = randomBytes(32).toString('hex')
-const dataDir = mkdtempSync(path.join(tmpdir(), 'ghostscraper-datasmoke-'))
+const dataDir = mkdtempSync(path.join(tmpdir(), 'branchscrapper-datasmoke-'))
 step('start sidecar (test mode)')
 const child = spawn(PY, [HARNESS, '--data-dir', dataDir], {
   cwd: ROOT,

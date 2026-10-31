@@ -68,8 +68,9 @@ def _abs_path(value: Any, name: str = "path") -> Path:
 class Api:
     def __init__(self, *, manager: RunManager, store: Store, relay: ScreenRelay, data_dir: Path,
                  db_path: Path, request_shutdown: Callable[[], None], pid: int | None = None,
-                 test_mode: bool = False):
+                 test_mode: bool = False, migration: str = "none"):
         self.manager, self.store, self.relay = manager, store, relay
+        self.migration = migration     # result of the Ghost Scraper -> Branch Scrapper data copy at startup
         self.data_dir, self.db_path = data_dir, db_path
         self._request_shutdown = request_shutdown
         self.pid = pid if pid is not None else os.getpid()
@@ -112,7 +113,7 @@ class Api:
                 "db_path": str(self.db_path), "config_path": str(self.manager.config_path),
                 "schema_version": schema, "run_active": self.manager.active, "test_mode": self.test_mode,
                 "max_browsers": MAX_BROWSERS, "frozen": bool(getattr(sys, "frozen", False)),
-                "browser": browser}
+                "browser": browser, "migration": self.migration}
 
     async def app_shutdown(self, client: Client, p: dict) -> dict:
         asyncio.get_running_loop().call_later(0.1, self._request_shutdown)   # let the reply go out first

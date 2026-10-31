@@ -138,7 +138,7 @@ def plan_panel(cfg: Config) -> Panel:
     t.add_row("Estimate", f"≤ {pages} page loads · roughly {_fmt_dur(lo)}–{_fmt_dur(hi)}")
     for w in _query_warnings(cfg):
         t.add_row("[yellow]Warning[/]", f"[yellow]{w}[/]")
-    return Panel(t, title=f"GitHub Ghost Scraper v{__version__} · search plan",
+    return Panel(t, title=f"Branch Scrapper v{__version__} · search plan",
                  subtitle=f"[dim]{CONFIG_PATH}[/]", border_style="magenta", expand=False)
 
 

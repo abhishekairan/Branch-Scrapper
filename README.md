@@ -1,4 +1,6 @@
-# GitHub Ghost Scraper
+# Branch Scrapper
+
+(Formerly "Ghost Scraper" up to v0.1.0; see [upgrading](#upgrading-from-ghost-scraper-010).)
 
 A Windows desktop app that searches GitHub for repositories and collects, per repo: link, description,
 website, stars, forks, watchers, branches, tags, releases, commits, contributors, open issues/PRs, languages (%),
@@ -8,13 +10,13 @@ SQLite database, and lets you search, filter and export it. The same scraper cor
 command-line tool.
 
 <p align="center">
-  <a href="docs/media/ghost-scraper-promo.mp4">
-    <img src="docs/media/ghost-scraper-promo.gif" width="400"
-         alt="22-second promo: queries and filters, live browser tiles, shared Chrome contexts, search and filter, JSON and CSV export, free download">
+  <a href="docs/media/branch-scrapper-promo.mp4">
+    <img src="docs/media/branch-scrapper-promo.gif" width="400"
+         alt="23-second promo: queries and filters, live browser tiles, shared Chrome contexts, search and filter, JSON and CSV export, free download">
   </a>
   <br>
-  <sub><a href="docs/media/ghost-scraper-promo.mp4">Watch the full-quality video (MP4)</a> ·
-  <a href="https://github.com/abhishekairan/Branch-Scrapper/releases/tag/v0.1.0">Download v0.1.0</a></sub>
+  <sub><a href="docs/media/branch-scrapper-promo.mp4">Watch the full-quality video with sound (MP4)</a> ·
+  <a href="https://github.com/abhishekairan/Branch-Scrapper/releases/latest">Download the latest release</a></sub>
 </p>
 
 ![Run screen: two search queries, the exact query strings sent to GitHub and a time estimate](docs/screenshots/run.png)
@@ -40,7 +42,8 @@ command-line tool.
 
 ## Download and install (Windows)
 
-1. Download `Ghost Scraper_<version>_x64-setup.exe` from the
+1. Download `Branch Scrapper_<version>_x64-setup.exe` (on the Releases page the file name has no space:
+   `BranchScrapper_<version>_x64-setup.exe`) from the
    [Releases page](https://github.com/abhishekairan/Branch-Scrapper/releases).
 2. Run it. It installs per user, no administrator rights needed.
 3. The installer is **not code-signed**, so Windows SmartScreen shows "Windows protected your PC". Click
@@ -51,8 +54,15 @@ Windows 11; the installer downloads its bootstrapper if it is missing. No Python
 
 The installer is about 18 MiB and uses about 51 MB installed (measured, see `packaging/README.md`).
 
-**Where your data lives:** `%APPDATA%\GhostScraper` (`data.db`, `config.json`, `logs\`). It is kept when you
+**Where your data lives:** `%APPDATA%\BranchScrapper` (`data.db`, `config.json`, `logs\`). It is kept when you
 uninstall; delete the folder yourself to remove it.
+
+### Upgrading from Ghost Scraper 0.1.0
+
+Just run the new installer. It silently removes the old Ghost Scraper program (not your data), and on its first
+start Branch Scrapper copies `%APPDATA%\GhostScraper` to `%APPDATA%\BranchScrapper`. The old folder is left in
+place with a `MIGRATED_TO.txt` note; delete it once you have checked that everything is there. UI preferences
+such as the Browsers layout are reset once.
 
 ## Platform status
 
@@ -157,7 +167,7 @@ for how you use it.
 
 ## Support
 
-Ghost Scraper is free. If it is useful to you, you can support its development, entirely optionally:
+Branch Scrapper is free. If it is useful to you, you can support its development, entirely optionally:
 
 - [Buy Me a Coffee](https://buymeacoffee.com/abhishekairan)
 - [PayPal](https://paypal.me/AbhishekAiran001)

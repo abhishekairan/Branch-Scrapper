@@ -456,6 +456,10 @@ class ZendriverPool:
         for rec in self._chromes:
             await self._stop_browser(rec)
 
+    def roots(self) -> list[int]:
+        """PIDs of the Chrome browser processes (one per live record)."""
+        return [rec.pid for rec in self._chromes if rec.pid]
+
     def processes(self) -> list[int]:
         pids: list[int] = []
         for rec in self._chromes:

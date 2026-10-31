@@ -304,6 +304,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "branch-scrapper"
+version = "0.1.1"
+dependencies = [
+ "getrandom 0.4.3",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+]
+
+[[package]]
 name = "brotli"
 version = "9.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,21 +1290,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
-]
-
-[[package]]
-name = "ghost-scraper"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.4.3",
- "log",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
 ]
 
 [[package]]

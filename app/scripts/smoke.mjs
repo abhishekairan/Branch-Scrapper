@@ -45,7 +45,7 @@ async function until(cond, timeoutMs, what) {
 
 // ------------------------------------------------------------------ start the sidecar
 const token = randomBytes(32).toString('hex')
-const dataDir = mkdtempSync(path.join(tmpdir(), 'ghostscraper-smoke-'))
+const dataDir = mkdtempSync(path.join(tmpdir(), 'branchscrapper-smoke-'))
 step('start sidecar (test mode)')
 const child = spawn(PY, [HARNESS, '--data-dir', dataDir], {
   cwd: ROOT,

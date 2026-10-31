@@ -188,9 +188,14 @@ def validate_config(cfg: Config, for_run: bool = True) -> dict:
 
 
 # ------------------------------------------------------------------ process memory
-def measure_processes(pids: list[int]) -> list[dict]:
+def measure_processes(pids: list[int], roots: list[int] | None = None) -> list[dict]:
     """Group `pids` (as returned by BrowserPool.processes) into process trees, one per root,
-    and sum RSS / USS (bytes; USS is None when the OS denies it) for each."""
+    and sum RSS / USS (bytes; USS is None when the OS denies it) for each.
+
+    `roots` are the pool's known browser PIDs: with them, only those that are alive form a
+    tree, and a process that can't be attributed to one is ignored. A short-lived Chrome child
+    that exits between `processes()` and this call (its ppid lookup fails) must never count as
+    a Chrome of its own."""
     import psutil
     procs: dict[int, Any] = {}
     for pid in dict.fromkeys(pids):
@@ -199,18 +204,21 @@ def measure_processes(pids: list[int]) -> list[dict]:
         except psutil.Error:
             continue
     parent = {}
-    for pid, p in procs.items():
+    for pid, p in list(procs.items()):
         try:
             parent[pid] = p.ppid()
         except psutil.Error:
-            parent[pid] = None
+            del procs[pid]          # exited meanwhile: not a process tree root
+    known = {r for r in (roots or []) if r in procs}
     trees: dict[int, list[int]] = {}
     for pid in procs:
         root = pid
         seen = {root}
-        while parent.get(root) in procs and parent[root] not in seen:
+        while root not in known and parent.get(root) in procs and parent[root] not in seen:
             root = parent[root]
             seen.add(root)
+        if roots is not None and root not in known:
+            continue
         trees.setdefault(root, []).append(pid)
     out = []
     for root, members in trees.items():
@@ -518,7 +526,9 @@ class RunManager:
                 continue
             try:
                 pids = list(pool.processes())
-                trees = await asyncio.to_thread(measure_processes, pids)
+                get_roots = getattr(pool, "roots", None)
+                roots = list(get_roots()) if callable(get_roots) else None
+                trees = await asyncio.to_thread(measure_processes, pids, roots)
             except Exception as e:
                 log.debug("pool stats failed: %s", e)
                 continue

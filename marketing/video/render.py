@@ -1,14 +1,20 @@
-"""Render the Ghost Scraper promo (marketing/video/index.html) to MP4 via headless Chrome (zendriver) + ffmpeg.
+"""Render the Branch Scrapper promo (marketing/video/index.html) to MP4 via headless Chrome (zendriver) + ffmpeg.
 
 Every frame is produced by calling window.renderAt(t) and capturing the viewport, so the result is
-deterministic and independent of wall-clock time.
+deterministic and independent of wall-clock time. Scene timing is read from timeline.json (shared with audio.py)
+and injected into the page as window.__TIMELINE__.
+
+Audio: run audio.py first (writes marketing/out/soundtrack.wav); it is muxed as AAC 192 kbps / 48 kHz.
+Pass --no-audio for a silent render.
 
 Usage (from anywhere):
+    F:/Projects/Github Scrapper/V1/.venv/Scripts/python.exe marketing/video/audio.py             # soundtrack.wav
     F:/Projects/Github Scrapper/V1/.venv/Scripts/python.exe marketing/video/render.py            # both formats
     ... render.py --format 9x16                                                                 # one format
+    ... render.py --no-audio                                                                    # silent MP4s
     ... render.py --stills 1.0,3.9,8.5 --still-dir C:/tmp/stills --format 9x16                   # review PNGs only
 
-Outputs (marketing/out/): ghost-scraper-<fmt>.mp4, cover-<fmt>.png, contact-<fmt>.jpg
+Outputs (marketing/out/): branch-scrapper-<fmt>.mp4, cover-<fmt>.png, contact-<fmt>.jpg
 """
 from __future__ import annotations
 
@@ -28,7 +34,9 @@ from zendriver import cdp
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parent / "out"
 SIZES = {"9x16": (1080, 1920), "4x5": (1080, 1350)}
-COVER_T = 4.2  # title card: icon + wordmark fully revealed
+COVER_T = 4.4  # title card: icon + wordmark + version chip fully revealed (reveal scene starts at 2.81 s)
+TIMELINE_JSON = (HERE / "timeline.json").read_text(encoding="utf-8")
+SOUNDTRACK = OUT / "soundtrack.wav"
 
 
 def kill_leftovers(marker: str) -> None:
@@ -45,6 +53,9 @@ async def open_page(browser, fmt: str):
     w, h = SIZES[fmt]
     tab = await browser.get("about:blank")
     await tab.send(cdp.emulation.set_device_metrics_override(width=w, height=h, device_scale_factor=1, mobile=False))
+    # file:// pages cannot fetch timeline.json, so hand it to app.js before any page script runs
+    await tab.send(cdp.page.enable())
+    await tab.send(cdp.page.add_script_to_evaluate_on_new_document(source=f"window.__TIMELINE__ = {TIMELINE_JSON};"))
     url = (HERE / "index.html").as_uri() + f"?format={fmt}"
     tab = await browser.get(url)
     await tab.send(cdp.emulation.set_device_metrics_override(width=w, height=h, device_scale_factor=1, mobile=False))
@@ -86,14 +97,20 @@ async def render_format(browser, fmt: str, args) -> None:
         return
 
     n = int(round(total * fps))
-    mp4 = OUT / f"ghost-scraper-{fmt}.mp4"
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg", "-i", "-",
+    mp4 = OUT / f"branch-scrapper-{fmt}.mp4"
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg", "-i", "-"]
+    if args.no_audio:
+        audio_args = ["-an"]
+    else:
+        # apad makes the audio endless so -shortest ends on the VIDEO (never cuts it); the extra audio is trimmed
+        cmd += ["-i", str(args.audio)]
+        audio_args = ["-map", "0:v:0", "-map", "1:a:0", "-af", "apad", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+                      "-ac", "2", "-shortest"]
+    cmd += [
         "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
         "-c:v", "libx264", "-preset", "slow", "-crf", str(args.crf), "-r", str(fps),
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-        "-movflags", "+faststart", "-an", str(mp4),
+        *audio_args, "-movflags", "+faststart", str(mp4),
     ]
     ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     try:
@@ -123,6 +140,8 @@ async def render_format(browser, fmt: str, args) -> None:
 
 
 async def main(args) -> None:
+    if not args.stills and not args.no_audio and not Path(args.audio).exists():
+        raise SystemExit(f"soundtrack not found: {args.audio}\nrun marketing/video/audio.py first, or pass --no-audio")
     profile = tempfile.mkdtemp(prefix="gs-promo-chrome-")
     browser = None
     try:
@@ -150,6 +169,8 @@ if __name__ == "__main__":
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--crf", type=int, default=19)
     ap.add_argument("--cover-t", type=float, default=COVER_T)
+    ap.add_argument("--no-audio", action="store_true", help="render silent MP4s")
+    ap.add_argument("--audio", default=str(SOUNDTRACK), help="soundtrack to mux (default marketing/out/soundtrack.wav)")
     ap.add_argument("--stills", type=lambda s: [float(x) for x in s.split(",")], default=None,
                     help="comma-separated times; writes PNGs to --still-dir and skips the video")
     ap.add_argument("--still-dir", default=str(HERE.parent / "out" / "_stills"))
