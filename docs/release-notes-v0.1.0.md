@@ -14,7 +14,7 @@ windows, stores them locally and lets you search, filter and export them.
 
 ## Install
 
-1. Download `Ghost Scraper_0.1.0_x64-setup.exe` below.
+1. Download `GhostScraper_0.1.0_x64-setup.exe` below.
 2. Run it (per-user install, no admin rights). Windows SmartScreen will say "Windows protected your PC"
    because the installer is not code-signed: click **More info**, then **Run anyway**.
 3. You need Google Chrome (or Microsoft Edge / Brave) installed. WebView2 is downloaded if missing.
