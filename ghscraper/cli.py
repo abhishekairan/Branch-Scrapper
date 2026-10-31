@@ -22,7 +22,9 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.table import Table
 
 from . import __version__
-from .config import CONFIG_PATH, MAX_BROWSERS, SORT_CHOICES, SORT_OPTIONS, Config, parse_queries
+from .browser.backend import plan_chromes
+from .config import (BROWSER_CHOICES, CONFIG_PATH, MAX_BROWSERS, SORT_CHOICES, SORT_OPTIONS, Config,
+                     parse_queries)
 from .exporters import export
 from .filters import (FILTERS, LICENSE_HINTS, MATCH_FIELDS, SPECS, check_query, describe, normalize,
                       to_qualifiers)
@@ -123,8 +125,11 @@ def plan_panel(cfg: Config) -> Panel:
     t.add_row("Sort · limit", f"{cfg.sort_label()} · up to {cfg.max_results} per query")
     collect = "deep scrape" + (" + manifests" if cfg.fetch_manifests else "") if cfg.deep_scrape \
         else "listing data only"
-    t.add_row("Sessions", f"{cfg.worker_count()} browser(s) · {'headless' if cfg.headless else 'visible'}"
-                          f" · {collect}")
+    workers = cfg.worker_count()
+    chromes = len(plan_chromes(workers, cfg.workers_per_chrome, cfg.isolate_workers))
+    t.add_row("Sessions", f"{workers} worker(s) in {chromes} {cfg.browser} process(es) · "
+                          f"{'headless' if cfg.headless else 'headed, off-screen'}"
+                          f"{' · no images/fonts' if cfg.block_resources else ''} · {collect}")
     t.add_row("Output", f"{cfg.output_dir} · {', '.join(cfg.formats)}")
     if qs:
         t.add_row("Sent to GitHub", f"[green]{cfg.search_query(qs[0])}[/]"
@@ -422,10 +427,23 @@ def edit_data(cfg: Config) -> None:
 
 
 def edit_browser(cfg: Config) -> None:
-    cfg.browsers = int(_ask(questionary.text(f"Parallel browser sessions (1-{MAX_BROWSERS}):",
+    cfg.browsers = int(_ask(questionary.text(f"Parallel workers (1-{MAX_BROWSERS}):",
                                              default=str(min(cfg.browsers, MAX_BROWSERS)),
                                              validate=_int(1, MAX_BROWSERS))))
-    cfg.headless = _ask(questionary.confirm("Run headless (no visible window)?", default=cfg.headless))
+    cfg.workers_per_chrome = int(_ask(questionary.text(
+        "Workers sharing one Chrome process (each gets its own context; fewer Chromes = less RAM):",
+        default=str(cfg.workers_per_chrome), validate=_int(1, MAX_BROWSERS))))
+    cfg.isolate_workers = _ask(questionary.confirm(
+        "Isolate workers (one Chrome per worker: more RAM, no shared crashes)?", default=cfg.isolate_workers))
+    cfg.block_resources = _ask(questionary.confirm(
+        "Block images, fonts and media (the parsers only need HTML)?", default=cfg.block_resources))
+    cfg.browser = _ask(questionary.select("Browser:", choices=list(BROWSER_CHOICES),
+                                          default=cfg.browser if cfg.browser in BROWSER_CHOICES else "chrome"))
+    cfg.browser_path = _ask(questionary.text(
+        "Browser executable path (blank = auto-detect):", default=cfg.browser_path)).strip().strip('"')
+    cfg.headless = _ask(questionary.confirm(
+        "Run headless? (Chrome is otherwise headed but parked off-screen; headless is easier to detect)",
+        default=cfg.headless))
     cfg.human_search = _ask(questionary.confirm("Type the query into GitHub's search box (more human)?",
                                                 default=cfg.human_search))
     cfg.min_delay = float(_ask(questionary.text("Min delay between pages (s):", default=str(cfg.min_delay),
@@ -572,10 +590,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     b = ap.add_argument_group("browser & output")
     b.add_argument("-b", "--browsers", type=int, choices=range(1, MAX_BROWSERS + 1),
-                   metavar=f"1-{MAX_BROWSERS}", help="parallel browser sessions")
+                   metavar=f"1-{MAX_BROWSERS}", help="parallel workers")
+    b.add_argument("--workers-per-chrome", type=int, choices=range(1, MAX_BROWSERS + 1),
+                   metavar=f"1-{MAX_BROWSERS}", dest="workers_per_chrome",
+                   help="workers (browser contexts) sharing one Chrome process; default 3")
+    b.add_argument("--isolate-workers", action="store_true", default=None,
+                   help="one Chrome process per worker (more RAM, no shared crashes)")
+    b.add_argument("--block-resources", action="store_true", default=None,
+                   help="block images, fonts and media")
+    b.add_argument("--browser", choices=list(BROWSER_CHOICES), help="browser to drive (default chrome)")
     hl = b.add_mutually_exclusive_group()
-    hl.add_argument("--headless", action="store_true", default=None)
-    hl.add_argument("--visible", action="store_true", default=None)
+    hl.add_argument("--headless", action="store_true", default=None,
+                    help="true headless (easier to detect); default is headed but off-screen")
+    hl.add_argument("--visible", action="store_true", default=None, help="headed, off-screen (the default)")
     b.add_argument("--no-deep", action="store_true", help="only collect search-listing data")
     b.add_argument("--no-manifests", action="store_true", help="skip manifest-based tech stack")
     b.add_argument("--proxy")
@@ -613,9 +640,14 @@ def apply_args(cfg: Config, args: argparse.Namespace, queries: list[str]) -> Non
     for dest in ("sponsorable", "funding_file"):
         if getattr(args, dest):
             cfg.filters[dest] = True
-    for key in ("max_results", "browsers", "sort", "order", "proxy", "output_dir"):
+    for key in ("max_results", "browsers", "sort", "order", "proxy", "output_dir", "workers_per_chrome",
+                "browser"):
         if getattr(args, key) is not None:
             setattr(cfg, key, getattr(args, key))
+    if args.isolate_workers:
+        cfg.isolate_workers = True
+    if args.block_resources:
+        cfg.block_resources = True
     if cfg.max_results is not None and not 1 <= cfg.max_results <= GITHUB_RESULT_CAP:
         raise ValueError(f"--limit must be between 1 and {GITHUB_RESULT_CAP}")
     if args.headless:

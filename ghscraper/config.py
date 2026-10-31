@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -10,7 +12,8 @@ from .filters import build_query, clean_filters, split_queries
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
-MAX_BROWSERS = 5  # hard cap on parallel browser sessions (RAM + GitHub rate limits)
+MAX_BROWSERS = 5  # hard cap on parallel workers (RAM + GitHub rate limits)
+BROWSER_CHOICES = ("chrome", "msedge", "brave")
 
 SORT_OPTIONS = {
     "best-match": None,
@@ -45,7 +48,12 @@ class Config:
     fetch_manifests: bool = True      # read package.json / pyproject etc. for tech stack
 
     # --- browser / stealth ---
-    browsers: int = 2                 # parallel browser sessions (1..MAX_BROWSERS)
+    browsers: int = 2                 # parallel workers (1..MAX_BROWSERS); name kept for config compatibility
+    workers_per_chrome: int = 3       # browser contexts (workers) sharing one Chrome process
+    isolate_workers: bool = False     # True = one Chrome per worker (max isolation, more RAM)
+    block_resources: bool = False     # block images/fonts/media (parsers only need HTML)
+    browser: str = "chrome"           # chrome | msedge | brave
+    browser_path: str = ""            # explicit browser executable (blank = auto-detect)
     headless: bool = False
     human_search: bool = True         # type the query into GitHub's search box
     min_delay: float = 2.0            # random pause between page loads (seconds)
@@ -81,7 +89,8 @@ class Config:
         return proxies[index % len(proxies)] if proxies else ""
 
     def profile_for(self, index: int) -> str:
-        # Chrome locks a profile dir, so parallel sessions each need their own.
+        # Chrome locks a profile dir, so each Chrome process needs its own;
+        # `index` is the Chrome process number (see browser.zendriver_backend.plan_chromes).
         if not self.user_data_dir:
             return ""
         return self.user_data_dir if index == 0 else f"{self.user_data_dir}-{index + 1}"
@@ -112,3 +121,17 @@ class Config:
 def parse_queries(text: str) -> list[str]:
     """Split user input into queries (see filters.split_queries for the comma rules)."""
     return split_queries(text)
+
+
+def app_data_dir(app_name: str = "GhostScraper") -> Path:
+    """Per-user data directory for the app. Does not create it."""
+    override = os.environ.get("GHOSTSCRAPER_HOME")
+    if override:
+        return Path(override)
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        return Path(base) / app_name
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(xdg) / app_name.lower()

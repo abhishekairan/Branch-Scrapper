@@ -1,6 +1,7 @@
 # GitHub Ghost Scraper
 
-Stealth GitHub repository scraper built on **SeleniumBase UC mode** (undetected Chrome).
+Stealth GitHub repository scraper built on **Zendriver** (drives Chrome directly over the DevTools
+Protocol, asyncio-based).
 Search by keyword and get, per repo: link, description, website, stars, forks, watchers,
 branches, tags, releases, commits, contributors, open issues/PRs, languages (%),
 detected tech stack, topics, license, default branch, created / last-commit dates.
@@ -12,7 +13,9 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Requires Google Chrome installed. SeleniumBase downloads a matching chromedriver on first run.
+Requires Google Chrome installed (or Microsoft Edge / Brave: `--browser msedge|brave`, or `browser_path`
+in `config.json` for a custom executable). There is no chromedriver: Zendriver talks to the browser
+over the DevTools Protocol, so nothing else is downloaded on first run.
 
 ## Usage
 
@@ -72,17 +75,28 @@ Sort (`--sort stars|forks|updated --order desc|asc`) matches GitHub's own sort m
 
 ## Multiple browsers & queries
 
-- `browsers` (1–8, hard cap `MAX_BROWSERS` in `config.py`) parallel sessions share **one task queue**.
+- `browsers` (1–5, hard cap `MAX_BROWSERS` in `config.py`; `-b N`) parallel workers share **one task queue**.
   Searches (one per query) are queued first; each finished search pushes its repo pages back
-  onto the queue, so detail scraping is spread over every browser, even with a single query.
+  onto the queue, so detail scraping is spread over every worker, even with a single query.
+- Workers are browser **contexts** (own cookies, own window, own proxy) inside a few Chrome processes:
+  `workers_per_chrome` (default 3, `--workers-per-chrome`) workers share one Chrome, so 3 workers run in
+  one Chrome instead of three. A measured sample (single run, Chrome 156, Windows) put 3 workers at about
+  630 MB (USS) in one Chrome vs about 940 MB in three. `isolate_workers` (`--isolate-workers`) goes back to
+  one Chrome per worker for maximum isolation, at the price of RAM. If a Chrome or tab dies, the worker's
+  context (or that Chrome) is recreated and its task is retried (at most 2 times).
+- `block_resources` (`--block-resources`) blocks images, fonts and media; the parsers only need HTML.
 - `max_results` is **per query**. A repo matched by several queries is scraped once;
   `matched_queries` lists all of them (`query` = the first that found it).
 - With deep scrape off, no more browsers are launched than there are queries.
-- Browsers launch one at a time (UC mode patches chromedriver on disk) and cascade their windows.
+- Chrome processes launch one at a time with a short random gap. Windows are headed but parked
+  off-screen (`--window-position=-32000,-32000`), so nothing appears on your desktop.
 - A rate-limit hit pauses **every** session sharing that exit IP. Comma-separate proxies
   (`p1:port, p2:port`) to give each browser its own IP, round-robin.
-- `user_data_dir`: Chrome locks a profile, so browser 1 uses the dir as-is and browsers 2+ use
-  `<dir>-2`, `<dir>-3`… — log in to each separately if you want logged-in limits everywhere.
+- `user_data_dir`: Chrome locks a profile, so Chrome process 1 uses the dir as-is and processes 2+ use
+  `<dir>-2`, `<dir>-3`…. Only the first worker of each Chrome runs inside that persistent profile
+  (logged in); the other workers sharing that Chrome are fresh logged-out contexts. With
+  `--isolate-workers` every worker has its own profile. A proxy for a profile worker can't use
+  `user:pass@` credentials (use `host:port`).
 - All sessions share your IP unless you use proxies: 4 browsers ≈ 4× the request rate, so
   raise `min_delay`/`max_delay` if you start seeing back-off messages.
 
@@ -112,12 +126,18 @@ go.mod / composer.json fetched from `raw.githubusercontent.com`.
 
 ## Stealth measures
 
-- UC mode: patched chromedriver, `navigator.webdriver` hidden, driver detached during page load.
+- Zendriver drives Chrome over CDP with no chromedriver and no webdriver binary; in a spike run,
+  `navigator.webdriver` was `false` and the user agent / Client Hints matched a normal Chrome (headed).
+- Chrome runs headed but off-screen by default. `--headless` works, but it is easier to detect: in
+  that spike headless Chrome reported empty `userAgentData.brands` (missing Client Hints).
 - Optional human typing into GitHub's header search box, randomised delays, scrolling, occasional long pauses.
 - Rate-limit / abuse page detection with exponential back-off.
-- Optional proxy and persistent Chrome profile (`user_data_dir`) — log in once manually in a
-  visible run to get higher logged-in search limits.
-- Headless is more detectable than a visible window; use visible mode if you get blocked.
+- Optional proxy and persistent Chrome profile (`user_data_dir`). The scraper's windows are off-screen,
+  so to get higher logged-in search limits log in beforehand: start Chrome yourself with
+  `--user-data-dir=<that dir>`, sign in to GitHub, close it, then run the scraper with the same dir.
+  (Not tested end to end yet.)
+- Chrome processes are placed in an OS job (Windows) or killed on exit (other platforms, best effort),
+  so closing or killing the scraper does not leave browsers behind.
 
 ## Limits
 

@@ -1,0 +1,27 @@
+[package]
+name = "ghost-scraper"
+version = "0.1.0"
+description = "GitHub Ghost Scraper desktop shell"
+authors = ["Abhishek Airan"]
+license = ""
+repository = ""
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "ghost_scraper_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+# OS CSPRNG for the sidecar auth token (already in tauri's dependency tree).
+getrandom = "0.4"
+tauri-plugin-opener = "2"

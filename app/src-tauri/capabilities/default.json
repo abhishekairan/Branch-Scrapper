@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimum for the main window: receive events, native save/open dialogs, and opening https links (repo pages, websites) in the system browser. The sidecar commands (sidecar_info, restart_sidecar) are app commands and need no grant.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:default",
+    "dialog:allow-save",
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*" }]
+    }
+  ]
+}

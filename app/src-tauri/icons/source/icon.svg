@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b3a67"/>
+      <stop offset="1" stop-color="#11162b"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#bg)"/>
+  <!-- ghost body: round head, straight sides, scalloped hem -->
+  <path fill="#f4f6ff" d="M512 176
+    C 358 176 262 290 262 448
+    L 262 800
+    C 262 828 294 842 314 822
+    L 372 764
+    C 384 752 402 752 414 764
+    L 462 812
+    C 488 838 536 838 562 812
+    L 610 764
+    C 622 752 640 752 652 764
+    L 710 822
+    C 730 842 762 828 762 800
+    L 762 448
+    C 762 290 666 176 512 176 Z"/>
+  <!-- eyes -->
+  <ellipse cx="428" cy="456" rx="42" ry="58" fill="#11162b"/>
+  <ellipse cx="596" cy="456" rx="42" ry="58" fill="#11162b"/>
+  <circle cx="440" cy="436" r="14" fill="#f4f6ff"/>
+  <circle cx="608" cy="436" r="14" fill="#f4f6ff"/>
+  <!-- mouth -->
+  <path d="M470 580 Q512 618 554 580" fill="none" stroke="#11162b" stroke-width="22" stroke-linecap="round"/>
+</svg>

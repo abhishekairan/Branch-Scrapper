@@ -12,3 +12,17 @@ downloaded_files/
 latest_logs/
 archived_logs/
 chrome_profile*/
+
+# Spike outputs (saved pages, screenshots, measurements)
+spikes/out/
+
+# Packaging outputs (PyInstaller work/dist, staged sidecar, installers)
+build/
+dist/
+app/src-tauri/sidecar/*
+!app/src-tauri/sidecar/README.txt
+
+# Desktop app (Tauri + Svelte)
+app/node_modules/
+app/dist/
+app/src-tauri/target/
