@@ -1,0 +1,14 @@
+# Local Python env (never global Python)
+.venv/
+__pycache__/
+*.pyc
+
+# Scrape results and per-user settings
+output/
+config.json
+
+# SeleniumBase runtime files and Chrome profiles
+downloaded_files/
+latest_logs/
+archived_logs/
+chrome_profile*/

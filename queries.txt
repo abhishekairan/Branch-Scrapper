@@ -1,0 +1,12 @@
+open source ERP invoicing or topic:erp invoice
+open source CRM invoicing quotes
+topic:accounting invoice
+open source accounting software
+topic:crm combined with invoice in:readme
+freelancer management app invoices time tracking
+project management app invoicing
+topic:saas-boilerplate billing invoice
+topic:point-of-sale invoice (or topic:pos)
+topic:inventory-management invoice
+topic:ecommerce invoice order
+topic:hrms payroll invoice

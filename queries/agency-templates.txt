@@ -1,0 +1,15 @@
+topic:agency-website
+topic:agency-template
+marketing agency website template stars:>=5
+seo agency website stars:>=3
+digital agency template stars:>=10
+creative agency template stars:>=5
+agency template topic:nextjs stars:>=10
+agency theme topic:astro stars:>=10
+agency website topic:tailwindcss stars:>=10
+agency website gsap stars:>=5
+agency template topic:framer-motion
+agency portfolio topic:lenis
+marketing website template topic:nextjs stars:>=50
+landing page template topic:astro stars:>=50
+saas landing page template topic:tailwindcss stars:>=200

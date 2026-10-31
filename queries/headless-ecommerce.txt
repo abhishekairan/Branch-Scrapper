@@ -1,0 +1,18 @@
+# Headless e-commerce: backends to build a client site on, plus ready storefronts.
+# Run: .\.venv\Scripts\python.exe main.py --queries-file queries\headless-ecommerce.txt --clear-filters --archived false --pushed "within 1y" --sort stars
+
+# --- Platforms / backends (the engine: products, cart, checkout, admin) ---
+headless commerce topic:headless-commerce stars:>=300
+headless ecommerce topic:ecommerce topic:headless stars:>=200
+topic:ecommerce-platform topic:headless stars:>=200
+headless ecommerce typescript stars:>=100
+headless ecommerce graphql stars:>=200
+headless ecommerce php laravel stars:>=100
+shopify alternative stars:>=100
+
+# --- Storefronts / starters (the website on top of a backend) ---
+nextjs commerce storefront topic:nextjs topic:ecommerce stars:>=100
+medusa storefront stars:>=10
+saleor storefront stars:>=30
+vendure storefront stars:>=20
+shopify storefront nextjs stars:>=50
