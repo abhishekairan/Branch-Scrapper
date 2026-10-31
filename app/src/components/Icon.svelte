@@ -1,5 +1,5 @@
 <script lang="ts">
-  type Name = 'run' | 'browsers' | 'data' | 'grid' | 'single' | 'list' | 'expand' | 'hand' | 'play' | 'stop' | 'eye' | 'external'
+  type Name = 'run' | 'browsers' | 'data' | 'grid' | 'single' | 'list' | 'expand' | 'hand' | 'play' | 'stop' | 'eye' | 'external' | 'info'
   let { name, size = 16 }: { name: Name; size?: number } = $props()
 
   // 16x16 stroke icons, drawn for this app.
@@ -16,6 +16,7 @@
     stop: 'M3.5 3.5h9v9h-9z',
     eye: 'M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 9.8a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z',
     external: 'M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9v4h-9V4h4',
+    info: 'M8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8 7.2V11M8 5h.01',
   }
 </script>
 

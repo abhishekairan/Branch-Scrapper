@@ -98,11 +98,19 @@ export function onSlotFrame(slot: number, fn: (f: Frame) => void): () => void {
 
 let started = false
 
+let lastWanted: number[] = []
+
 export function initView(): void {
   if (started) return
   started = true
 
   api.onFrame((f) => {
+    // A slot that was "pending" when browser.view replied starts streaming later without a reply;
+    // the first frame is the proof, so promote it here (otherwise the toolbar says nothing streams).
+    if (!view.streaming.includes(f.slot) && lastWanted.includes(f.slot)) {
+      view.streaming = [...view.streaming, f.slot].sort((a, b) => a - b)
+      view.waiting = view.waiting.filter((i) => i !== f.slot)
+    }
     const set = sinks.get(f.slot)
     if (set) for (const fn of set) fn(f)
   })
@@ -123,6 +131,7 @@ export function initView(): void {
         timer = null
         if (sig === lastSent) return
         lastSent = sig
+        lastWanted = want.indices
         api
           .setView(want.indices, want.fps, want.maxWidth)
           .then((r) => {

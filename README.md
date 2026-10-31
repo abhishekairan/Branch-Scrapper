@@ -1,23 +1,73 @@
 # GitHub Ghost Scraper
 
-Stealth GitHub repository scraper built on **Zendriver** (drives Chrome directly over the DevTools
-Protocol, asyncio-based).
-Search by keyword and get, per repo: link, description, website, stars, forks, watchers,
-branches, tags, releases, commits, contributors, open issues/PRs, languages (%),
-detected tech stack, topics, license, default branch, created / last-commit dates.
+A Windows desktop app that searches GitHub for repositories and collects, per repo: link, description,
+website, stars, forks, watchers, branches, tags, releases, commits, contributors, open issues/PRs, languages (%),
+detected tech stack, topics, licence, default branch and created / last-commit dates. It drives a real,
+hidden Chrome over the DevTools Protocol (Zendriver) instead of calling the API, stores everything in a local
+SQLite database, and lets you search, filter and export it. The same scraper core is also available as a
+command-line tool.
 
-## Setup (isolated venv — never global Python)
+![Run screen: two search queries, the exact query strings sent to GitHub and a time estimate](docs/screenshots/run.png)
+
+![Run screen during a scrape: progress bar, per-worker status, latest saved repositories and log](docs/screenshots/run-progress.png)
+
+![Browsers screen: live tiles streaming three scraper browsers](docs/screenshots/browsers-grid.png)
+
+![Data screen: results filtered by language, sorted by stars, with the repository detail drawer open](docs/screenshots/data-dark.png)
+
+## Features
+
+- **Run screen**: enter queries and filters (the same names as `gh search repos`), with validation before you
+  start and a **Preview counts** button that loads only page 1 of each search and shows GitHub's match count.
+- **Live browser tiles**: the scraper's Chrome windows are parked off-screen; the Browsers screen streams them
+  as tiles, only while a tile is visible, and **Take control** lets you click and type in one (for example to
+  sign in to GitHub).
+- **Shared Chrome contexts**: several workers run as separate browser contexts inside one Chrome to save RAM
+  (an isolated Chrome per worker is an option).
+- **Data screen**: full-text search, filters, saved datasets, a detail drawer, JSON and CSV export, and import of
+  results saved by the old command-line scraper.
+- **CLI**: the original command-line interface still works from a source checkout (see below).
+
+## Download and install (Windows)
+
+1. Download `Ghost Scraper_<version>_x64-setup.exe` from the
+   [Releases page](https://github.com/abhishekairan/Branch-Scrapper/releases).
+2. Run it. It installs per user, no administrator rights needed.
+3. The installer is **not code-signed**, so Windows SmartScreen shows "Windows protected your PC". Click
+   **More info**, then **Run anyway**.
+
+Requirements: Windows 10/11 x64, and Google Chrome (or Microsoft Edge / Brave). WebView2 is preinstalled on
+Windows 11; the installer downloads its bootstrapper if it is missing. No Python is needed.
+
+The installer is about 18 MiB and uses about 51 MB installed (measured, see `packaging/README.md`).
+
+**Where your data lives:** `%APPDATA%\GhostScraper` (`data.db`, `config.json`, `logs\`). It is kept when you
+uninstall; delete the folder yourself to remove it.
+
+## Platform status
+
+Windows is the only tested platform. Linux and macOS are planned but not supported yet.
+
+## Build from source
+
+Full steps, prerequisites and measured sizes are in [`packaging/README.md`](packaging/README.md). In short:
+Python 3.12 venv, Rust (MSVC), Node 22; freeze the sidecar with `packaging\build_sidecar.py`, then
+`npx tauri build` in `app/`.
+
+To run the app in development (uses `.venv\Scripts\python.exe -m ghscraper.sidecar` as the backend):
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd app
+npm ci
+npx tauri dev
 ```
 
-Requires Google Chrome installed (or Microsoft Edge / Brave: `--browser msedge|brave`, or `browser_path`
-in `config.json` for a custom executable). There is no chromedriver: Zendriver talks to the browser
-over the DevTools Protocol, so nothing else is downloaded on first run.
+## Command-line usage
 
-## Usage
+Needs the Python venv from above and Chrome (or Edge/Brave via `--browser msedge|brave`, or `browser_path` in
+`config.json`). There is no chromedriver; nothing is downloaded on first run.
 
 ```powershell
 # Interactive menu (search, headless toggle, settings editor)
@@ -32,22 +82,13 @@ over the DevTools Protocol, so nothing else is downloaded on first run.
 .\.venv\Scripts\python.exe main.py -h
 ```
 
-In the interactive menu, type keywords as `web scraper; cli tool; rust http` or `@queries.txt`.
-Commas also separate queries, except inside a qualifier (`in:name,description` stays one query).
+Query syntax: separate queries with `;` or commas (commas inside a qualifier such as `in:name,description`
+stay part of that query), repeat `-q`, or use `@queries.txt` / `--queries-file`. Qualifiers can be written
+inline (`shop topic:ecommerce stars:>20`).
 
-## Interactive menu
+### Filters
 
-The **search plan** panel is always on screen: queries, filters, sort, sessions, output, the exact
-string sent to GitHub, a rough time estimate, and warnings (e.g. `topc:` → did you mean `topic:`?).
-Shortcut keys: **r** run · **p** preview counts · **q** queries · **f** filters · **s** sort & limit ·
-**h** headless · **b** browser & stealth · **d** data · **o** output · **x** exit.
-**Preview counts** loads only page 1 of each search and shows GitHub's match count, so you can
-tune filters before a long run. A full run shows its estimate and asks before starting.
-
-## Filters
-
-Filters apply to every query, are saved in `config.json` (`filters`), and use the same names as
-`gh search repos`. You can also write qualifiers inline in a query (`shop topic:ecommerce stars:>20`).
+Filters apply to every query, are saved in `config.json` (`filters`), and use the same names as `gh search repos`.
 
 | Flag | GitHub qualifier | Example |
 |---|---|---|
@@ -64,92 +105,59 @@ Filters apply to every query, are saved in `config.json` (`filters`), and use th
 | `--sponsorable`, `--funding-file` | `is:sponsorable`, `has:funding-file` | |
 | `--qualifier` | anything else, raw | `--qualifier "-language:php topics:>3"` |
 
-Sort (`--sort stars|forks|updated --order desc|asc`) matches GitHub's own sort menu.
-`--count` (alias `--dry-run`) previews match counts only. `--clear-filters` ignores saved filters.
-`--save` stores the flags' settings in `config.json`.
+Sort with `--sort stars|forks|updated --order desc|asc`. `--count` (alias `--dry-run`) previews match counts
+only, `--clear-filters` ignores saved filters, `--save` stores the flags' settings in `config.json`.
 
-- Relative dates (`30d`, `2w`, `6m`, `1y`) are kept relative in the config and resolved on each run.
-- Prefer the word forms (`before …`) on Windows: `<` and `>` are redirects in cmd and need quoting.
-- **GitHub never reports a bad qualifier value**: `stars:abc` or `created:notadate` silently return
-  0 results. The scraper validates every filter before running and flags queries that match 0.
+- Relative dates (`30d`, `2w`, `6m`, `1y`) stay relative in the config and resolve on each run.
+- Prefer the word forms (`before ...`) on Windows: `<` and `>` are redirects in cmd and need quoting.
+- GitHub never reports a bad qualifier value: `stars:abc` silently returns 0 results. The scraper validates
+  every filter before running and flags queries that match 0.
 
-## Multiple browsers & queries
+### Workers, browsers and proxies
 
-- `browsers` (1–5, hard cap `MAX_BROWSERS` in `config.py`; `-b N`) parallel workers share **one task queue**.
-  Searches (one per query) are queued first; each finished search pushes its repo pages back
-  onto the queue, so detail scraping is spread over every worker, even with a single query.
-- Workers are browser **contexts** (own cookies, own window, own proxy) inside a few Chrome processes:
-  `workers_per_chrome` (default 3, `--workers-per-chrome`) workers share one Chrome, so 3 workers run in
-  one Chrome instead of three. A measured sample (single run, Chrome 156, Windows) put 3 workers at about
-  630 MB (USS) in one Chrome vs about 940 MB in three. `isolate_workers` (`--isolate-workers`) goes back to
-  one Chrome per worker for maximum isolation, at the price of RAM. If a Chrome or tab dies, the worker's
-  context (or that Chrome) is recreated and its task is retried (at most 2 times).
-- `block_resources` (`--block-resources`) blocks images, fonts and media; the parsers only need HTML.
-- `max_results` is **per query**. A repo matched by several queries is scraped once;
-  `matched_queries` lists all of them (`query` = the first that found it).
-- With deep scrape off, no more browsers are launched than there are queries.
-- Chrome processes launch one at a time with a short random gap. Windows are headed but parked
-  off-screen (`--window-position=-32000,-32000`), so nothing appears on your desktop.
-- A rate-limit hit pauses **every** session sharing that exit IP. Comma-separate proxies
-  (`p1:port, p2:port`) to give each browser its own IP, round-robin.
-- `user_data_dir`: Chrome locks a profile, so Chrome process 1 uses the dir as-is and processes 2+ use
-  `<dir>-2`, `<dir>-3`…. Only the first worker of each Chrome runs inside that persistent profile
-  (logged in); the other workers sharing that Chrome are fresh logged-out contexts. With
-  `--isolate-workers` every worker has its own profile. A proxy for a profile worker can't use
-  `user:pass@` credentials (use `host:port`).
-- All sessions share your IP unless you use proxies: 4 browsers ≈ 4× the request rate, so
-  raise `min_delay`/`max_delay` if you start seeing back-off messages.
+- `browsers` (1-5, `-b N`) parallel workers share one task queue. `workers_per_chrome` (default 3) workers share
+  one Chrome as separate contexts; `--isolate-workers` gives each worker its own Chrome and profile.
+- A rate-limit hit pauses every session sharing that exit IP. Comma-separate proxies to give each browser its
+  own IP. All sessions share your IP otherwise, so raise `min_delay`/`max_delay` if you see back-off messages.
+- `user_data_dir` keeps a persistent Chrome profile. Logged-in profiles have not been tested end to end.
+- Chrome processes are placed in a Windows job object so closing or killing the scraper does not leave
+  browsers behind.
 
-Results go to `output/<query>_<timestamp>.json` and `.csv`. Settings persist in `config.json`
-(created on first run, editable by hand or via the menu).
+Results from the CLI go to `output/<query>_<timestamp>.json` and `.csv`.
 
-## How it extracts data (from analysing GitHub's markup)
+### Limits
 
-GitHub's search and repo pages are React apps that ship their data as JSON in
-`<script data-target="react-app.embeddedData">`. Class names are hashed CSS modules
-(`Button__AyoG5z`) and change between deploys, so the scraper never relies on them.
+- GitHub search returns at most 1000 results (100 pages of 10 when logged out).
+- Deep scrape costs one page load per repo (about 3-8 s each with default delays).
 
-| Data | Source |
-|---|---|
-| Search results, stars, language, topics | `payload.blackbirdSearchRoute.results[]` (DOM fallback: `[data-testid="results-list"]`) |
-| Description, website, topics, stars, forks, watchers, license, releases, tags | `payload.sidebarAbout` |
-| Default branch, created date, fork/archived | `payload.codeViewLayoutRoute.repo` |
-| Root files (tech stack), commit count | `payload.codeViewRepoRoute.tree.items`, `.overview.commitCount` |
-| Languages % | `span[role=progressbar][aria-label="Lang: N%"]` |
-| Branches | `a[href="/{repo}/branches"]` text |
-| Contributors | `h2 a[href$="/graphs/contributors"]` + `[data-component=CounterLabel]` |
-| Issues / PRs | repo tab `a[href$="/issues"]` counter (hidden = 0) |
+### Tests
 
-Tech stack = languages ≥1% + root-file signatures (Dockerfile, next.config.*, Cargo.toml…)
-+ optional dependency scan of package.json / requirements.txt / pyproject.toml / Cargo.toml /
-go.mod / composer.json fetched from `raw.githubusercontent.com`.
-
-## Stealth measures
-
-- Zendriver drives Chrome over CDP with no chromedriver and no webdriver binary; in a spike run,
-  `navigator.webdriver` was `false` and the user agent / Client Hints matched a normal Chrome (headed).
-- Chrome runs headed but off-screen by default. `--headless` works, but it is easier to detect: in
-  that spike headless Chrome reported empty `userAgentData.brands` (missing Client Hints).
-- Optional human typing into GitHub's header search box, randomised delays, scrolling, occasional long pauses.
-- Rate-limit / abuse page detection with exponential back-off.
-- Optional proxy and persistent Chrome profile (`user_data_dir`). The scraper's windows are off-screen,
-  so to get higher logged-in search limits log in beforehand: start Chrome yourself with
-  `--user-data-dir=<that dir>`, sign in to GitHub, close it, then run the scraper with the same dir.
-  (Not tested end to end yet.)
-- Chrome processes are placed in an OS job (Windows) or killed on exit (other platforms, best effort),
-  so closing or killing the scraper does not leave browsers behind.
-
-## Limits
-
-- GitHub search returns at most 1000 results (100 pages × 10 when logged out).
-- Deep scrape costs one page load per repo (~3–8 s each with default delays).
-- Respect GitHub's Terms of Service; for large-scale or commercial collection the official
-  REST/GraphQL API (5000 req/h with a token) is the sanctioned route.
-
-## Tests
-
-Offline parser tests against saved pages in `tests/fixtures` — re-capture them if GitHub changes its markup:
+Offline parser and core tests (re-capture the fixtures in `tests/fixtures` if GitHub changes its markup):
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover tests
 ```
+
+## Responsible use
+
+Respect GitHub's [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service)
+and rate limits. This tool is meant for personal research. For large-scale or commercial collection, use the
+official REST/GraphQL API (5000 requests/hour with a token), which is the sanctioned route. You are responsible
+for how you use it.
+
+## Support
+
+Ghost Scraper is free. If it is useful to you, you can support its development, entirely optionally:
+
+- [Buy Me a Coffee](https://buymeacoffee.com/abhishekairan)
+- [PayPal](https://paypal.me/AbhishekAiran001)
+- UPI: `abhishekairan1234@okhdfcbank`
+
+Thank you. Bug reports and starring the repo help just as much.
+
+## Licence
+
+GNU Affero General Public License v3.0 (see [`LICENSE`](LICENSE)). In plain terms: you may use, modify and
+redistribute it, but forks and redistributed copies must stay open source under the same licence. The licence
+is AGPL because the installer bundles [Zendriver](https://github.com/cdpdriver/zendriver), which is AGPL-3.0.
+Third-party components and their licences are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

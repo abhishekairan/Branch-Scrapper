@@ -52,8 +52,8 @@ export function errMessage(e: unknown): string {
 
 // ================================================================ navigation
 
-export type Route = 'run' | 'browsers' | 'data'
-const ROUTES = ['run', 'browsers', 'data'] as const
+export type Route = 'run' | 'browsers' | 'data' | 'about'
+const ROUTES = ['run', 'browsers', 'data', 'about'] as const
 
 /** `nav.route` decides which screen App.svelte mounts. Add a screen = add it here and in App.svelte. */
 export const nav = $state({ route: load<Route>('gs.route', ROUTES, 'run') })

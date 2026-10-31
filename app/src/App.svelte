@@ -5,6 +5,7 @@
   import ConnBanner from './components/ConnBanner.svelte'
   import Nav from './components/Nav.svelte'
   import StatusBar from './components/StatusBar.svelte'
+  import About from './views/About.svelte'
   import Browsers from './views/Browsers.svelte'
   import Data from './views/Data.svelte'
   import Run from './views/Run.svelte'
@@ -24,6 +25,8 @@
       <Run />
     {:else if nav.route === 'browsers'}
       <Browsers />
+    {:else if nav.route === 'about'}
+      <About />
     {:else}
       <Data />
     {/if}

@@ -38,6 +38,16 @@
     {/each}
   </ul>
 
+  <button
+    class="about"
+    class:active={nav.route === 'about'}
+    aria-current={nav.route === 'about' ? 'page' : undefined}
+    onclick={() => go('about')}
+  >
+    <Icon name="info" />
+    <span>About</span>
+  </button>
+
   <div class="foot muted">
     {#if conn.version}<span>sidecar v{conn.version}</span>{/if}
     {#if conn.testMode}<span class="test">test mode (fake browsers)</span>{/if}
@@ -85,16 +95,33 @@
     font-weight: 500;
     text-align: left;
   }
-  li button:hover {
+  li button:hover,
+  .about:hover {
     background: var(--sunken);
     color: var(--text);
   }
-  li button.active {
+  li button.active,
+  .about.active {
     background: var(--accent-weak);
     color: var(--accent);
   }
-  .foot {
+  .about {
     margin-top: auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-2);
+    font-weight: 500;
+    text-align: left;
+  }
+  .foot {
+    margin-top: 0;
     padding: 8px;
     display: flex;
     flex-direction: column;
