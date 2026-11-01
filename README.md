@@ -49,6 +49,8 @@ command-line tool.
 3. The installer is **not code-signed**, so Windows SmartScreen shows "Windows protected your PC". Click
    **More info**, then **Run anyway**.
 
+See the [code signing policy](docs/code-signing-policy.md) for how installer signing is planned.
+
 Requirements: Windows 10/11 x64, and Google Chrome (or Microsoft Edge / Brave). WebView2 is preinstalled on
 Windows 11; the installer downloads its bootstrapper if it is missing. No Python is needed.
 
