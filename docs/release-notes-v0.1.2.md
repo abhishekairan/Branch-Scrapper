@@ -42,7 +42,7 @@ browser tiles, a fix for the Single-view preview size, and keeps the scraper's C
 
 Your data is stored in `%APPDATA%\BranchScrapper` and is kept when you uninstall.
 
-SHA256: __INSTALLER_SHA256__
+SHA256: 0d89efd5239dc1349ea54f480fddc4f297a8de30dab551e03bd1937f2b21780e
 
 ## Known limitations
 
