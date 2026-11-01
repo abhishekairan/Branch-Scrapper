@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 import { SidecarClient } from '../src/lib/api.ts'
 import { toPagePoint, keyEvent } from '../src/lib/input.ts'
+import { parseNotes } from '../src/lib/notes.ts'
 import { RPC, RpcError, packFrame, parseFrame } from '../src/lib/protocol.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -274,6 +275,20 @@ try {
   } catch {
     /* log file may still be open on Windows */
   }
+}
+
+// ------------------------------------------------------------------ release notes (untrusted text from the update server)
+step('release notes parser')
+{
+  const blocks = parseNotes('# Title\n\nintro **bold**\nsecond line\n\n- item `code` [link](https://x.y)\n* other\n<img src=x onerror=alert(1)>')
+  ok(blocks.length === 5, `5 blocks (got ${blocks.length})`)
+  ok(blocks[0].kind === 'h' && blocks[0].text === 'Title', 'heading')
+  ok(blocks[1].kind === 'p' && blocks[1].text === 'intro bold second line', 'paragraph lines joined, ** removed')
+  ok(blocks[2].kind === 'li' && blocks[2].text === 'item code link', 'bullet: code ticks and link URL removed')
+  ok(blocks[4].kind === 'p' && blocks[4].text.startsWith('<img'), 'HTML stays literal text (rendered as a text node, never {@html})')
+  ok(parseNotes(null).length === 0 && parseNotes('').length === 0, 'empty notes -> no blocks')
+  ok(parseNotes('x'.repeat(5000))[0].text.length === 600, 'very long lines are capped')
+  ok(parseNotes('- a\n'.repeat(1000)).length <= 200, 'block count is capped')
 }
 
 console.log(failures === 0 ? '\nSMOKE PASSED' : `\nSMOKE FAILED (${failures} problem${failures > 1 ? 's' : ''})`)

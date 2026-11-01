@@ -1,6 +1,6 @@
 [package]
 name = "branch-scrapper"
-version = "0.1.1"
+version = "0.1.2"
 description = "Branch Scrapper desktop shell"
 authors = ["Abhishek Airan"]
 license = "AGPL-3.0-only"
@@ -25,3 +25,7 @@ tauri-plugin-dialog = "2"
 # OS CSPRNG for the sidecar auth token (already in tauri's dependency tree).
 getrandom = "0.4"
 tauri-plugin-opener = "2"
+# In-app updates (minisign-signed releases from GitHub). Driven by our own commands (src/updates.rs), not by the
+# plugin's JS API: the endpoint can be overridden for tests, and the sidecar must be stopped before the installer
+# starts. The installer relaunches the app itself (/R), so tauri-plugin-process is not needed.
+tauri-plugin-updater = "2.14.1"

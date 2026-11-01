@@ -19,8 +19,13 @@ GHOSTSCRAPER_TOKEN=<secret, >= 32 chars>  python -m ghscraper.sidecar [--port N]
   (On Windows a venv `python.exe` is a launcher: the `pid` in this line is the real sidecar, not necessarily
   the process you spawned. A PyInstaller build has no such launcher.)
 * Logs: stderr and `<data dir>/logs/sidecar.log` (rotating, 1 MB x 3).
-* Data dir: `--data-dir`, else `GHOSTSCRAPER_HOME`, else the OS app-data dir (`%APPDATA%\BranchScrapper`). When the default dir is used (neither
-  `--data-dir` nor `GHOSTSCRAPER_HOME`) and it is missing or empty, the sidecar first copies the pre-rename
+* Data dir, in this order: `--data-dir`; `GHOSTSCRAPER_HOME`; the folder named by the **pointer file**
+  `<default data dir>/location.json` = `{"data_dir": "<absolute path>"}` (written by `storage.move`, removed by
+  `storage.reset`; ignored, with a warning in the log and `app.info.storage.problem`, when it is not valid JSON,
+  not an absolute path or names a folder that does not exist); else the OS app-data dir
+  (`%APPDATA%\BranchScrapper`, the "default data dir"). The pointer file always lives in the default data dir,
+  whichever folder is in use. When the default dir is used (no `--data-dir`, no `GHOSTSCRAPER_HOME`, no valid
+  pointer) and it is missing or empty, the sidecar first copies the pre-rename
   `%APPDATA%\GhostScraper` into it (`migrate_legacy_data_dir`; copy only, nothing is deleted from the old folder).
   Files: `data.db`, `config.json` (created on first run: copied from the repo-local `config.json` if there is
   one, else defaults; the packaged build never looks for a repo-local file), `logs/`.
@@ -75,6 +80,7 @@ Errors: `{"jsonrpc":"2.0","id":..,"error":{"code":..,"message":"..","data":..}}`
 | -32005 | export failed | could not write the file (message has the OS error) |
 | -32006 | bad worker | index outside `0..workers-1` of the active run |
 | -32007 | browser error | the browser slot failed the operation |
+| -32008 | storage failed | `storage.move`/`storage.reset` could not copy, verify or save the pointer; nothing was changed |
 
 Server-side delivery guarantee: **JSON messages (replies and events) are never dropped** and keep their order
 per client. Only screencast frames may be dropped (section 6).
@@ -86,7 +92,10 @@ per client. Only screencast frames may be dropped (section 6).
 normalised: ranges like `">=100"`, `"10..50"`, dates like `"30d.."`), `deep_scrape`, `fetch_manifests`,
 `browsers` (1..5), `workers_per_chrome`, `isolate_workers`, `block_resources`, `browser`
 (`chrome|msedge|brave`), `browser_path`, `headless`, `human_search`, `min_delay`, `max_delay`, `typing_delay`,
-`max_retries`, `proxy`, `user_data_dir`, `page_timeout`, `output_dir`, `formats` (`json`/`csv`).
+`max_retries`, `proxy`, `user_data_dir`, `page_timeout`, `output_dir`, `formats` (`json`/`csv`),
+`ui_theme` (`system|light|dark`, the desktop app's appearance; the UI also keeps it in localStorage),
+`check_updates` (bool, default `true`: the desktop app looks for a new version at startup, at most once a day; the
+UI also keeps it in localStorage. The update check itself is done by the Tauri shell, not by the sidecar).
 
 An **overrides** object contains any subset of those fields. It is overlaid on the saved config; a bad value
 reports `{field, message}` (nested filters as `filters.<key>`), unknown keys are errors. `queries` may also
@@ -97,7 +106,10 @@ be a string (split on `;`/newline/comma by the CLI rules).
 ### 5.1 App
 * `app.info {}` -> `{version, pid, platform, python, data_dir, db_path, config_path, schema_version, run_active, test_mode, max_browsers, frozen, browser, migration}`;
   `migration` = result of the startup data copy from Ghost Scraper (<= 0.1.0): `"none"`, `"migrated"`, `"skipped-existing"` or `"failed: <reason>"`;
-  `browser` = `{selected, custom_path, path, available, found:{chrome,msedge,brave -> path|null}}` (is a browser installed? `path` is what a run would launch); `frozen` = running from the PyInstaller build (where `--test-mode` is refused)
+  `browser` = `{selected, custom_path, path, available, found:{chrome,msedge,brave -> path|null}}` (is a browser installed? `path` is what a run would launch); `frozen` = running from the PyInstaller build (where `--test-mode` is refused);
+  `storage` = `{source:"arg"|"env"|"pointer"|"default", custom, can_change, default_dir, default_has_data, db_bytes, problem|null, pending_restart|null}`:
+  where `data_dir` came from; `can_change` is false for `arg`/`env` (the pointer file would have no effect there, so `storage.*` refuse);
+  `db_bytes` = `data.db` + `data.db-wal`; `problem` = why a saved pointer is not used; `pending_restart` = the folder a finished `storage.move`/`reset` will use after a restart
 * `app.shutdown {}` -> `{ok:true}`; the process begins a clean shutdown ~0.1 s after replying.
 
 ### 5.2 Config
@@ -164,6 +176,28 @@ be a string (split on `;`/newline/comma by the CLI rules).
   nothing is left behind on failure. CSV: UTF-8 with BOM, lists/dicts flattened, formula-looking cells prefixed
   with `'`. JSON: array of records. `columns` selects/orders fields (CSV default: the standard column set).
 * Errors: -32602 (bad path/scope/filters/columns), -32005 (I/O).
+
+### 5.7 Storage (where the data lives)
+Only when the data dir was not fixed by `--data-dir` / `GHOSTSCRAPER_HOME` (`app.info.storage.can_change`); else -32602.
+Both refuse with -32001 while a run or preview is active (and `run.start`/`run.preview_counts` refuse while a move is
+copying), and with -32602 while an earlier change still waits for a restart (`storage.pending_restart`).
+The old folder is never modified or deleted.
+
+* `storage.move {path, dry_run?=false}` -> `{mode:"copy"|"switch", from, to, bytes_to_copy, existing: {table: rows}|null, dry_run:true}`
+  for a dry run (validates only, changes nothing), else `{restart_required:true, mode, from, to, bytes_to_copy, existing, tables:{table: rows}, warnings:[string]}`.
+  Validation (-32602, nothing touched): `path` absolute; not a file; not the current folder, inside it or a parent of it;
+  not the default folder (use `storage.reset`); writable; enough free space. An existing target must be **empty**
+  (`mode:"copy"`) or contain a valid Branch Scrapper `data.db` (`mode:"switch"`: nothing is copied, the pointer simply
+  points there; `existing` has its row counts); anything else non-empty is refused.
+  Copy: `PRAGMA wal_checkpoint(TRUNCATE)`, then `data.db` (+ `-wal`/`-shm` if present), `config.json` and `logs/` go into a
+  temp sibling `<target>.moving-<pid>`, the copied database is opened and its schema version and the row count of **every**
+  table (FTS tables included) must equal the source's, then the folder is renamed into place and the pointer file written
+  (temp file + replace). Any failure removes the temp folder (and a folder this call created) and leaves the pointer alone
+  (-32008). `logs/` is best effort (a locked log file only yields a warning). The running sidecar keeps using the old folder
+  until it is restarted; the shell does that with `restart_sidecar` (`restart_required`).
+* `storage.reset {}` -> `{restart_required:true, data_dir, kept}`: removes the pointer file so the next start uses the default
+  data dir. The data in the custom folder (`kept`) is not touched. If the default folder still has an earlier `data.db`
+  (`storage.default_has_data`) that is what the app will show.
 
 ## 6. Binary frames (screencast)
 

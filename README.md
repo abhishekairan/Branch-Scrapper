@@ -33,7 +33,8 @@ command-line tool.
   start and a **Preview counts** button that loads only page 1 of each search and shows GitHub's match count.
 - **Live browser tiles**: the scraper's Chrome windows are parked off-screen; the Browsers screen streams them
   as tiles, only while a tile is visible, and **Take control** lets you click and type in one (for example to
-  sign in to GitHub).
+  sign in to GitHub). On Windows those windows are also kept out of the taskbar and Alt-Tab while staying
+  headed (`hide_taskbar_icons`, turn off with `--show-taskbar-icons`).
 - **Shared Chrome contexts**: several workers run as separate browser contexts inside one Chrome to save RAM
   (an isolated Chrome per worker is an option).
 - **Data screen**: full-text search, filters, saved datasets, a detail drawer, JSON and CSV export, and import of
@@ -57,7 +58,24 @@ Windows 11; the installer downloads its bootstrapper if it is missing. No Python
 The installer is about 18 MiB and uses about 51 MB installed (measured, see `packaging/README.md`).
 
 **Where your data lives:** `%APPDATA%\BranchScrapper` (`data.db`, `config.json`, `logs\`). It is kept when you
-uninstall; delete the folder yourself to remove it.
+uninstall; delete the folder yourself to remove it. **Moving it:** Settings > Storage > Change location copies
+the database, settings and logs to a folder you choose (it must be empty or new), checks the copy, and restarts the
+backend on it. The old folder is left untouched, so delete it yourself once you are happy; picking a folder that
+already holds Branch Scrapper data just switches to it, and "Use the default location" goes back (a pointer file,
+`location.json`, stays in the default folder). Settings also has a System / Light / Dark theme.
+
+### Updating
+
+- **In the app (from 0.1.2):** Branch Scrapper checks for a new version when it starts (at most once a day) and
+  shows a bar with **What's new**, **Install & restart** and **Later**. Nothing installs without your click. Turn
+  the automatic check off, or check by hand, in **Settings > Updates**. Updates are downloaded from this
+  repository's GitHub releases and verified against a signature before they run.
+- **winget:** `winget upgrade AbhishekAiran.BranchScrapper` (once the new version is in the winget repository).
+- **By hand:** download and run the newer installer from the
+  [releases page](https://github.com/abhishekairan/Branch-Scrapper/releases); it replaces the old version in place.
+- **0.1.1 and older cannot update themselves:** install 0.1.2 by hand once.
+
+In every case your data in `%APPDATA%\BranchScrapper` is kept.
 
 ### Upgrading from Ghost Scraper 0.1.0
 

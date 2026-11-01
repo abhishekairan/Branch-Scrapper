@@ -23,7 +23,10 @@ import type {
   WorkerState,
 } from './protocol.ts'
 import { listenShell, restartSidecar } from './tauri.ts'
+import { applyTheme, isTheme, readStoredTheme, theme } from './theme.svelte.ts'
+import type { ThemeMode } from './theme.svelte.ts'
 import type { ConnState } from './api.ts'
+import { applyCheckUpdates, startupCheck, storedCheckUpdates, upd } from './updates.svelte.ts'
 
 // ================================================================ small helpers
 
@@ -52,8 +55,8 @@ export function errMessage(e: unknown): string {
 
 // ================================================================ navigation
 
-export type Route = 'run' | 'browsers' | 'data' | 'about'
-const ROUTES = ['run', 'browsers', 'data', 'about'] as const
+export type Route = 'run' | 'browsers' | 'data' | 'settings' | 'about'
+const ROUTES = ['run', 'browsers', 'data', 'settings', 'about'] as const
 
 /** `nav.route` decides which screen App.svelte mounts. Add a screen = add it here and in App.svelte. */
 export const nav = $state({ route: load<Route>('gs.route', ROUTES, 'run') })
@@ -394,7 +397,79 @@ export function resetToDefaults(): void {
   const d = structuredClone($state.snapshot(cfg.defaults)) as Config
   cfg.queriesText = d.queries.join('\n')
   d.filters = toFormFilters(cfg.meta, d.filters)
+  d.ui_theme = theme.mode // the run settings are reset, not the app's appearance
+  d.check_updates = upd.auto // ... nor the update switch
   cfg.draft = d
+}
+
+/**
+ * Throw the config draft away; the next `loadConfig` (on reconnect) rebuilds it from whatever config.json the
+ * restarted backend serves. Used after the data folder changed, so a stale draft is never autosaved over it.
+ */
+export function discardConfigDraft(): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = null
+  cfg.draft = null
+  cfg.validation = null
+  cfg.serverErrors = []
+  cfg.loaded = false
+}
+
+/**
+ * Choose the app theme: applies it now (page, localStorage, title bar) and stores it in the sidecar config so it
+ * survives a reset of the WebView profile. Returns an error text if the sidecar copy could not be saved ('' = ok).
+ */
+export async function setThemeMode(mode: ThemeMode): Promise<string> {
+  applyTheme(mode)
+  if (cfg.draft) cfg.draft.ui_theme = mode // else the autosave of the draft would write the old value back
+  if (!api.isOpen) return 'The choice is applied here but could not be saved: not connected to the backend.'
+  try {
+    await api.call('config.update', { values: { ui_theme: mode } })
+    return ''
+  } catch (e) {
+    return `The choice is applied here but could not be saved: ${errMessage(e)}`
+  }
+}
+
+/**
+ * Local and sidecar copy of the theme must agree. Nothing stored locally (first start, WebView profile reset):
+ * adopt the sidecar's. Otherwise this WebView wins and the sidecar is updated.
+ */
+function reconcileTheme(fromSidecar: unknown): void {
+  const server: ThemeMode = isTheme(fromSidecar) ? fromSidecar : 'system'
+  const local = readStoredTheme()
+  if (local === null) applyTheme(server)
+  else if (local !== server) {
+    void api.call('config.update', { values: { ui_theme: local } }).catch((e) => console.warn('theme sync failed', e))
+  }
+}
+
+/**
+ * "Automatically check for updates": applies it now (this WebView) and stores it in the sidecar config so it
+ * survives a reset of the WebView profile. Returns an error text if the sidecar copy could not be saved ('' = ok).
+ */
+export async function setCheckUpdates(on: boolean): Promise<string> {
+  applyCheckUpdates(on)
+  if (cfg.draft) cfg.draft.check_updates = on // else the autosave of the draft would write the old value back
+  if (!api.isOpen) return 'The choice is applied here but could not be saved: not connected to the backend.'
+  try {
+    await api.call('config.update', { values: { check_updates: on } })
+    return ''
+  } catch (e) {
+    return `The choice is applied here but could not be saved: ${errMessage(e)}`
+  }
+}
+
+/** Same rule as the theme: nothing stored locally -> adopt the sidecar's value; otherwise this WebView wins. */
+function reconcileCheckUpdates(fromSidecar: unknown): void {
+  const server = typeof fromSidecar === 'boolean' ? fromSidecar : true
+  const local = storedCheckUpdates()
+  if (local === null) applyCheckUpdates(server)
+  else if (local !== server) {
+    void api
+      .call('config.update', { values: { check_updates: local } })
+      .catch((e) => console.warn('update setting sync failed', e))
+  }
 }
 
 async function loadConfig(): Promise<void> {
@@ -402,8 +477,12 @@ async function loadConfig(): Promise<void> {
   conn.maxBrowsers = r.meta.max_browsers
   cfg.meta = r.meta
   cfg.defaults = r.defaults
+  reconcileTheme(r.config.ui_theme)
+  reconcileCheckUpdates(r.config.check_updates)
   if (!cfg.draft) {
     const d = structuredClone(r.config)
+    d.ui_theme = theme.mode
+    d.check_updates = upd.auto
     cfg.queriesText = d.queries.join('\n')
     d.filters = toFormFilters(r.meta, d.filters)
     cfg.draft = d
@@ -646,4 +725,5 @@ async function onOpen(): Promise<void> {
   } catch (e) {
     console.warn('initial sync failed', e)
   }
+  startupCheck() // once per start, and at most once a day (see updates.svelte.ts)
 }

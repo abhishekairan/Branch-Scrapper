@@ -58,7 +58,7 @@ _CONFIG_FIELDS = {f.name: f for f in dataclasses.fields(Config)}
 _INT_FIELDS = {"max_results": 1, "browsers": 1, "workers_per_chrome": 1, "max_retries": 0, "page_timeout": 1}
 _FLOAT_FIELDS = {"min_delay": 0.0, "max_delay": 0.0, "typing_delay": 0.0}
 _BOOL_FIELDS = {"deep_scrape", "fetch_manifests", "isolate_workers", "block_resources", "headless",
-                "human_search"}
+                "human_search", "check_updates"}
 _STR_FIELDS = {"browser_path", "proxy", "user_data_dir", "output_dir"}
 
 
@@ -135,6 +135,11 @@ def apply_overrides(base: Config, overrides: dict | None) -> tuple[Config, list[
         elif key == "browser":
             if val not in BROWSER_CHOICES:
                 err(key, f"use one of {', '.join(BROWSER_CHOICES)}")
+            else:
+                values[key] = val
+        elif key == "ui_theme":
+            if val not in ("system", "light", "dark"):
+                err(key, "use system, light or dark")
             else:
                 values[key] = val
         elif key == "formats":

@@ -58,6 +58,7 @@ class Config:
     browser: str = "chrome"           # chrome | msedge | brave
     browser_path: str = ""            # explicit browser executable (blank = auto-detect)
     headless: bool = False
+    hide_taskbar_icons: bool = True   # Windows: keep the (off-screen, headed) Chrome windows out of the taskbar/Alt-Tab
     human_search: bool = True         # type the query into GitHub's search box
     min_delay: float = 2.0            # random pause between page loads (seconds)
     max_delay: float = 5.0
@@ -70,6 +71,10 @@ class Config:
     # --- output ---
     output_dir: str = "output"
     formats: list[str] = field(default_factory=lambda: ["json", "csv"])
+
+    # --- app UI ---
+    ui_theme: str = "system"          # system | light | dark (desktop app appearance)
+    check_updates: bool = True        # desktop app: look for a new version at startup (at most once a day)
 
     def search_query(self, query: str) -> str:
         return build_query(query, self.filters)
@@ -99,7 +104,13 @@ class Config:
         return self.user_data_dir if index == 0 else f"{self.user_data_dir}-{index + 1}"
 
     def save(self, path: Path = CONFIG_PATH) -> None:
-        path.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
+        tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")     # atomic: a reader (or a copy of the data folder) never sees half a file
+        try:
+            tmp.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
+            os.replace(tmp, path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
@@ -149,6 +160,87 @@ def app_data_dir(app_name: str = APP_DIR_NAME) -> Path:
     if override:
         return Path(override)
     return _default_data_dir(app_name)
+
+
+POINTER_NAME = "location.json"           # lives in the DEFAULT data dir: {"data_dir": "<absolute path>"}
+UI_THEMES = ("system", "light", "dark")
+
+
+@dataclass
+class Location:
+    """Where the data dir came from. `source`: arg (--data-dir) | env (GHOSTSCRAPER_HOME) | pointer | default."""
+    data_dir: Path
+    source: str
+    default_dir: Path
+    problem: str | None = None            # e.g. the pointer file named a folder that is gone
+
+    @property
+    def pointer_file(self) -> Path:
+        return self.default_dir / POINTER_NAME
+
+    @property
+    def can_change(self) -> bool:
+        """The pointer file only has an effect when neither --data-dir nor GHOSTSCRAPER_HOME decides."""
+        return self.source in ("pointer", "default")
+
+
+def read_location_pointer(default_dir: Path) -> tuple[Path | None, str | None]:
+    """The data dir named by `<default_dir>/location.json` -> (path, None); (None, None) when there is no pointer;
+    (None, reason) when it exists but is unusable (bad JSON, relative path, folder missing)."""
+    f = default_dir / POINTER_NAME
+    try:
+        raw = f.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None, None
+    except OSError as e:
+        return None, f"{f} could not be read ({e})"
+    try:
+        value = json.loads(raw).get("data_dir")
+    except (ValueError, AttributeError):
+        return None, f"{f} is not valid JSON of the form {{\"data_dir\": \"<path>\"}}"
+    if not isinstance(value, str) or not value or not Path(value).is_absolute():
+        return None, f"{f} does not name an absolute folder"
+    p = Path(value)
+    if not p.is_dir():
+        return None, f"the chosen data folder {p} does not exist"
+    return p, None
+
+
+def write_location_pointer(default_dir: Path, target: Path) -> None:
+    """Atomically point the app at `target` (temp file + replace)."""
+    default_dir.mkdir(parents=True, exist_ok=True)
+    f = default_dir / POINTER_NAME
+    tmp = f.with_name(f"{POINTER_NAME}.tmp-{os.getpid()}")
+    try:
+        tmp.write_text(json.dumps({"data_dir": str(target)}, indent=2), encoding="utf-8")
+        os.replace(tmp, f)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def clear_location_pointer(default_dir: Path) -> bool:
+    """Remove the pointer (the data at the custom location is untouched). True if there was one."""
+    try:
+        (default_dir / POINTER_NAME).unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def resolve_data_dir(arg: Path | None = None, log=None) -> Location:
+    """Order: --data-dir > GHOSTSCRAPER_HOME > pointer file (if it names an existing folder) > default."""
+    if arg:
+        return Location(Path(arg), "arg", app_data_dir())
+    if os.environ.get(HOME_ENV):
+        return Location(app_data_dir(), "env", app_data_dir())
+    default = app_data_dir()               # no override is set here, so this is the OS default
+    target, problem = read_location_pointer(default)
+    if problem and log is not None:
+        log.warning("ignoring the data folder pointer: %s; using the default folder", problem)
+    if target is not None and target.resolve() != default.resolve():
+        return Location(target, "pointer", default)
+    return Location(default, "default", default, problem)
 
 
 def legacy_data_dir() -> Path:

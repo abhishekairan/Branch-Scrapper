@@ -20,7 +20,7 @@ from pathlib import Path
 
 from . import __version__
 from .browser import procguard
-from .config import CONFIG_PATH, app_data_dir, migrate_legacy_data_dir
+from .config import CONFIG_PATH, Location, migrate_legacy_data_dir, resolve_data_dir
 
 FROZEN = bool(getattr(sys, "frozen", False))     # True inside the PyInstaller build
 MIN_TOKEN_LEN = 32
@@ -114,7 +114,8 @@ def _install_signals(loop: asyncio.AbstractEventLoop, shutdown: asyncio.Event) -
             pass
 
 
-async def serve(args: argparse.Namespace, token: str, data_dir: Path, migration: str = "none") -> None:
+async def serve(args: argparse.Namespace, token: str, data_dir: Path, migration: str = "none",
+                location: Location | None = None) -> None:
     # Imported here so `--help` and the token check stay fast.
     from .api.methods import Api
     from .api.screen import ScreenRelay
@@ -144,7 +145,8 @@ async def serve(args: argparse.Namespace, token: str, data_dir: Path, migration:
     relay = ScreenRelay(manager, hub)
     manager.listeners.append(hub.broadcast)
     api = Api(manager=manager, store=store, relay=relay, data_dir=data_dir, db_path=db_path,
-              request_shutdown=shutdown.set, test_mode=bool(pool_factory), migration=migration)
+              request_shutdown=shutdown.set, test_mode=bool(pool_factory), migration=migration,
+              location=location)
     server = ApiServer(hub, api, token, port=args.port,
                        hello={"version": __version__, "pid": os.getpid()})
     try:
@@ -173,19 +175,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{TOKEN_ENV} must be set to a secret of at least {MIN_TOKEN_LEN} characters", file=sys.stderr)
         return 2
     # Before anything opens the DB, config or log files in the new location: bring over the data of the
-    # pre-rename app (Ghost Scraper). Skipped for an explicit --data-dir / GHOSTSCRAPER_HOME.
+    # pre-rename app (Ghost Scraper). Only for the default folder: skipped for an explicit --data-dir /
+    # GHOSTSCRAPER_HOME and for a folder the user chose in Settings (location.json).
+    # Order: --data-dir > GHOSTSCRAPER_HOME > location.json (if its folder exists) > default.
     deferred = _DeferredLog()
-    if args.data_dir:
-        data_dir, migration = args.data_dir, "none"
-    else:
-        data_dir = app_data_dir()
-        migration = migrate_legacy_data_dir(data_dir, deferred)
+    location = resolve_data_dir(args.data_dir, deferred)
+    data_dir = location.data_dir
+    migration = migrate_legacy_data_dir(data_dir, deferred) if location.source == "default" else "none"
     data_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(data_dir)
     deferred.replay(log)
-    log.info("Branch Scrapper sidecar %s, data dir %s, migration: %s", __version__, data_dir, migration)
+    log.info("Branch Scrapper sidecar %s, data dir %s (%s), migration: %s", __version__, data_dir,
+             location.source, migration)
     try:
-        asyncio.run(serve(args, token, data_dir, migration))
+        asyncio.run(serve(args, token, data_dir, migration, location))
     except KeyboardInterrupt:
         pass
     except Exception:

@@ -19,6 +19,7 @@ export const RPC = {
   EXPORT_FAILED: -32005,
   BAD_WORKER: -32006,
   BROWSER_ERROR: -32007,
+  STORAGE_FAILED: -32008,
   // client-side codes (never sent by the server)
   NOT_CONNECTED: -1001,
   TIMEOUT: -1002,
@@ -76,7 +77,13 @@ export interface Config {
   page_timeout: number
   output_dir: string
   formats: string[]
+  /** desktop app appearance (Settings > Theme) */
+  ui_theme: ThemeMode
+  /** desktop app: look for a new version at startup (Settings > Updates) */
+  check_updates: boolean
 }
+
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 export type FilterKind = 'list' | 'match' | 'range' | 'date' | 'choice' | 'flag' | 'raw'
 
@@ -137,6 +144,35 @@ export interface BrowserStatus {
   found: Record<BrowserKind, string | null>
 }
 
+/** Where the data folder came from and what can be done about it (app.info.storage). */
+export interface StorageInfo {
+  /** arg (--data-dir) | env (GHOSTSCRAPER_HOME) | pointer (chosen in Settings) | default */
+  source: 'arg' | 'env' | 'pointer' | 'default'
+  /** a folder chosen in Settings is in use */
+  custom: boolean
+  /** false when --data-dir / GHOSTSCRAPER_HOME decides: the pointer file would have no effect */
+  can_change: boolean
+  default_dir: string
+  /** custom folder in use and the default folder still holds an earlier data.db */
+  default_has_data: boolean
+  /** data.db + data.db-wal, bytes */
+  db_bytes: number
+  /** why a saved custom folder is not being used (e.g. it no longer exists) */
+  problem: string | null
+  /** a move/reset was done and waits for a backend restart; the folder that will be used */
+  pending_restart: string | null
+}
+
+export interface MovePlan {
+  /** copy = empty or new folder; switch = the folder already holds data.db, nothing is copied */
+  mode: 'copy' | 'switch'
+  from: string
+  to: string
+  bytes_to_copy: number
+  /** row counts per table of the data found at the target (mode "switch") */
+  existing: Record<string, number> | null
+}
+
 export interface AppInfo {
   version: string
   pid: number
@@ -154,6 +190,7 @@ export interface AppInfo {
   browser: BrowserStatus
   /** data copied from the pre-rename app at startup: 'none' | 'migrated' | 'skipped-existing' | 'failed: …' */
   migration: string
+  storage: StorageInfo
 }
 
 export type WorkerState =
@@ -384,6 +421,16 @@ export interface Methods {
   }
   'datasets.delete': { params: { id: number }; result: { deleted: boolean } }
   'runs.list': { params: NoParams; result: { runs: RunRow[] } }
+  'storage.move': {
+    params: { path: string; dry_run?: boolean }
+    result: MovePlan & {
+      dry_run?: true
+      restart_required?: true
+      tables?: Record<string, number>
+      warnings?: string[]
+    }
+  }
+  'storage.reset': { params: NoParams; result: { restart_required: true; data_dir: string; kept: string } }
   'export.write': {
     params: {
       filters?: Record<string, unknown>

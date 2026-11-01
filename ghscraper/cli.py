@@ -444,6 +444,10 @@ def edit_browser(cfg: Config) -> None:
     cfg.headless = _ask(questionary.confirm(
         "Run headless? (Chrome is otherwise headed but parked off-screen; headless is easier to detect)",
         default=cfg.headless))
+    if sys.platform == "win32":
+        cfg.hide_taskbar_icons = _ask(questionary.confirm(
+            "Hide the scraper's Chrome windows from the taskbar and Alt-Tab (Windows)?",
+            default=cfg.hide_taskbar_icons))
     cfg.human_search = _ask(questionary.confirm("Type the query into GitHub's search box (more human)?",
                                                 default=cfg.human_search))
     cfg.min_delay = float(_ask(questionary.text("Min delay between pages (s):", default=str(cfg.min_delay),
@@ -603,6 +607,8 @@ def build_parser() -> argparse.ArgumentParser:
     hl.add_argument("--headless", action="store_true", default=None,
                     help="true headless (easier to detect); default is headed but off-screen")
     hl.add_argument("--visible", action="store_true", default=None, help="headed, off-screen (the default)")
+    b.add_argument("--show-taskbar-icons", action="store_true", default=None,
+                   help="Windows: keep Chrome's taskbar buttons (they are hidden by default)")
     b.add_argument("--no-deep", action="store_true", help="only collect search-listing data")
     b.add_argument("--no-manifests", action="store_true", help="skip manifest-based tech stack")
     b.add_argument("--proxy")
@@ -654,6 +660,8 @@ def apply_args(cfg: Config, args: argparse.Namespace, queries: list[str]) -> Non
         cfg.headless = True
     if args.visible:
         cfg.headless = False
+    if args.show_taskbar_icons:
+        cfg.hide_taskbar_icons = False
     if args.no_deep:
         cfg.deep_scrape = False
     if args.no_manifests:

@@ -66,6 +66,7 @@ Direct dependencies from `app/src-tauri/Cargo.toml`, resolved versions from `Car
 | tauri-plugin-log | 2.10.1 | Apache-2.0 OR MIT |
 | tauri-plugin-dialog | 2.8.4 | Apache-2.0 OR MIT |
 | tauri-plugin-opener | 2.7.2 | Apache-2.0 OR MIT |
+| tauri-plugin-updater | 2.14.1 | Apache-2.0 OR MIT |
 | serde | 1.0.229 | MIT OR Apache-2.0 |
 | serde_json | 1.0.154 | MIT OR Apache-2.0 |
 | log | 0.4.35 | MIT OR Apache-2.0 |

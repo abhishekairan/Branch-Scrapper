@@ -4,6 +4,7 @@
   import { FrameRenderer } from '../lib/frames.ts'
   import { InputPump } from '../lib/inputpump.ts'
   import {
+    fitContain,
     keyEvent,
     modifierMask,
     mouseButton,
@@ -12,20 +13,29 @@
     shouldForwardKey,
     toPagePoint,
   } from '../lib/input.ts'
-  import { onSlotFrame, reportVisible, view } from '../lib/view.svelte.ts'
+  import { onSlotFrame, reportTileWidth, reportVisible, view } from '../lib/view.svelte.ts'
 
   interface Props {
     index: number
     /** forward mouse/keyboard to the browser while the worker is paused by the user */
     interactive?: boolean
-    /** report this box' width so the sidecar can pick max_width (Single layout) */
+    /** report the drawn width so the sidecar can pick max_width (Single layout) */
     trackWidth?: boolean
+    /** same, for a Grid tile */
+    trackTile?: boolean
   }
-  let { index, interactive = false, trackWidth = false }: Props = $props()
+  let { index, interactive = false, trackWidth = false, trackTile = false }: Props = $props()
 
   let canvas: HTMLCanvasElement | undefined = $state()
   let box: HTMLDivElement | undefined = $state()
   let drawn = $state(false)
+  // The preview is letterboxed in JS instead of with `width/height: 100%` + object-fit: the canvas gets an
+  // explicit pixel size (the largest box of the frame's aspect that fits), so it can never be taller or wider
+  // than the area it lives in, whatever the frame size or the window size.
+  let boxW = $state(0)
+  let boxH = $state(0)
+  let aspect = $state(16 / 10) // width / height of the last drawn frame
+  const fit = $derived(fitContain(boxW, boxH, aspect))
   let renderer: FrameRenderer | null = null
   let pump: InputPump | null = null
   let lastMove = 0
@@ -46,6 +56,13 @@
             : 'Not streaming',
   )
 
+  // tell the view how wide the picture is really drawn, so the sidecar sends a frame of that width (x dpr)
+  $effect(() => {
+    if (fit.width <= 0) return
+    if (trackWidth) view.singleCssWidth = fit.width
+    if (trackTile) reportTileWidth(index, fit.width)
+  })
+
   // a new run starts from a clean canvas
   $effect(() => {
     void run.startedAt
@@ -59,6 +76,7 @@
     renderer = new FrameRenderer(cv)
     renderer.onDraw = () => {
       drawn = true
+      if (cv.width > 0 && cv.height > 0) aspect = cv.width / cv.height
     }
     const offFrames = onSlotFrame(index, (f) => renderer?.push(f))
 
@@ -70,13 +88,12 @@
     )
     io.observe(bx)
 
-    let ro: ResizeObserver | null = null
-    if (trackWidth) {
-      ro = new ResizeObserver((entries) => {
-        view.singleCssWidth = entries[0].contentRect.width
-      })
-      ro.observe(bx)
-    }
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1].contentRect
+      boxW = r.width
+      boxH = r.height
+    })
+    ro.observe(bx)
 
     pump = new InputPump(index)
     pump.onError = (m) => (controlError.text = m)
@@ -94,7 +111,7 @@
       cv.removeEventListener('wheel', onWheel)
       offFrames()
       io.disconnect()
-      ro?.disconnect()
+      ro.disconnect()
       reportVisible(index, false)
       pump?.close()
       renderer?.destroy()
@@ -103,8 +120,16 @@
   })
 
   function point(e: MouseEvent): { x: number; y: number } | null {
-    if (!canvas || !renderer) return null
-    return toPagePoint(e.clientX, e.clientY, canvas.getBoundingClientRect(), renderer.pageWidth, renderer.pageHeight)
+    if (!canvas || !box || !renderer || canvas.height <= 0) return null
+    // the whole box is the letterbox area; points in the bars (outside the drawn frame) map to null and are ignored
+    return toPagePoint(
+      e.clientX,
+      e.clientY,
+      box.getBoundingClientRect(),
+      renderer.pageWidth,
+      renderer.pageHeight,
+      canvas.width / canvas.height,
+    )
   }
 
   function onMove(e: MouseEvent): void {
@@ -163,6 +188,8 @@
     height="10"
     tabindex={interactive ? 0 : -1}
     aria-label={`Browser ${index + 1}`}
+    style:width={fit.width ? `${fit.width}px` : '0'}
+    style:height={fit.height ? `${fit.height}px` : '0'}
     onmousemove={onMove}
     onmousedown={onDown}
     onkeydown={(e) => onKey('down', e)}
@@ -174,18 +201,19 @@
 </div>
 
 <style>
+  /* Fills its (positioned) parent without contributing to the parent's size, so the frame's pixel size can
+     never stretch the layout; the canvas is centred inside it at an explicit, aspect-correct size. */
   .box {
-    position: relative;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
     background: var(--sunken);
     overflow: hidden;
   }
   canvas {
     display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+    flex: none;
     outline: none;
   }
   .box.live {

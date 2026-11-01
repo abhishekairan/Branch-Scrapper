@@ -38,15 +38,24 @@
     {/each}
   </ul>
 
-  <button
-    class="about"
-    class:active={nav.route === 'about'}
-    aria-current={nav.route === 'about' ? 'page' : undefined}
-    onclick={() => go('about')}
-  >
-    <Icon name="info" />
-    <span>About</span>
-  </button>
+  <div class="bottom">
+    <button
+      class:active={nav.route === 'settings'}
+      aria-current={nav.route === 'settings' ? 'page' : undefined}
+      onclick={() => go('settings')}
+    >
+      <Icon name="settings" />
+      <span>Settings</span>
+    </button>
+    <button
+      class:active={nav.route === 'about'}
+      aria-current={nav.route === 'about' ? 'page' : undefined}
+      onclick={() => go('about')}
+    >
+      <Icon name="info" />
+      <span>About</span>
+    </button>
+  </div>
 
   <div class="foot muted">
     {#if conn.version}<span>sidecar v{conn.version}</span>{/if}
@@ -96,17 +105,22 @@
     text-align: left;
   }
   li button:hover,
-  .about:hover {
+  .bottom button:hover {
     background: var(--sunken);
     color: var(--text);
   }
   li button.active,
-  .about.active {
+  .bottom button.active {
     background: var(--accent-weak);
     color: var(--accent);
   }
-  .about {
+  .bottom {
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .bottom button {
     width: 100%;
     display: flex;
     align-items: center;

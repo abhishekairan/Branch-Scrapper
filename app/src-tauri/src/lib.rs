@@ -1,4 +1,5 @@
 mod sidecar;
+mod updates;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,8 +41,16 @@ pub fn run() {
     )
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .manage(Sidecar::new())
-    .invoke_handler(tauri::generate_handler![sidecar_info, restart_sidecar])
+    .manage(updates::UpdateState::default())
+    .invoke_handler(tauri::generate_handler![
+      sidecar_info,
+      restart_sidecar,
+      updates::app_version,
+      updates::check_for_update,
+      updates::install_update
+    ])
     .setup(|app| {
       // Start in the background so the window appears immediately; `sidecar_info` waits for READY.
       let sidecar = app.state::<Arc<Sidecar>>().inner().clone();
@@ -51,6 +60,10 @@ pub fn run() {
         .spawn(move || {
           let _ = sidecar.start(&handle);
         })?;
+      let handle = app.handle().clone();
+      std::thread::Builder::new()
+        .name("update-cleanup".into())
+        .spawn(move || updates::cleanup_leftovers(&handle))?;
       Ok(())
     })
     .build(tauri::generate_context!())

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { conn, restartBackend } from '../lib/app.svelte.ts'
   import { inTauri } from '../lib/tauri.ts'
+  import { upd } from '../lib/updates.svelte.ts'
 
-  const show = $derived(conn.state !== 'open')
+  // while an update installs, the backend is shut down on purpose: that is not an error to report
+  const show = $derived(conn.state !== 'open' && upd.phase === 'idle')
 </script>
 
 {#if show}
@@ -27,7 +29,6 @@
 
 <style>
   .banner {
-    grid-area: banner;
     display: flex;
     align-items: center;
     gap: 12px;

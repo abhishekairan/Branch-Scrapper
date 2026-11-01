@@ -60,6 +60,7 @@ const TIMEOUTS: Partial<Record<MethodName, number | null>> = {
   'run.start': 60_000,
   'export.write': 10 * 60_000,
   'data.import_json': 5 * 60_000,
+  'storage.move': 10 * 60_000, // copies the database; a big one on a slow disk takes a while
 }
 
 export class SidecarClient {

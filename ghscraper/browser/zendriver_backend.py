@@ -27,6 +27,7 @@ from zendriver.core.connection import ProtocolException
 from ..config import Config
 from ..parsers import detect_block
 from . import procguard, stealth
+from .taskbar import TaskbarHider
 from .backend import BlockedError, Cancelled, FrameCallback, SlotCrashed, plan_chromes
 
 dbg = logging.getLogger("ghscraper.browser")
@@ -417,11 +418,20 @@ class ZendriverPool:
         self._launch_lock = asyncio.Lock()
         self._sleep = stealth.make_sleeper(stop)
         self._closed = False
+        # Windows: Chrome is headed (off-screen); keep its windows out of the taskbar / Alt-Tab.
+        self._taskbar = TaskbarHider(self.processes) if cfg.hide_taskbar_icons else None
 
     # ---- lifecycle
     async def start(self) -> None:
         procguard.guard_current_process()
         procguard.track(self.processes)
+        self._hide_taskbar_icons()
+
+    def _hide_taskbar_icons(self) -> None:
+        """(Re)start the taskbar sweeper and make it look now; no-op off Windows or when disabled."""
+        if self._taskbar is not None and not self.cfg.headless and not self._closed:
+            self._taskbar.start()
+            self._taskbar.kick()
 
     async def acquire(self, worker_index: int) -> ZendriverSlot:
         if worker_index not in self._chrome_of:
@@ -452,6 +462,8 @@ class ZendriverPool:
 
     async def close(self) -> None:
         self._closed = True
+        if self._taskbar is not None:
+            self._taskbar.stop()
         procguard.untrack(self.processes)
         for rec in self._chromes:
             await self._stop_browser(rec)
@@ -504,6 +516,7 @@ class ZendriverPool:
             rec.browser, rec.default_tab, rec.default_tab_taken = browser, browser.main_tab, False
             rec.gen += 1
             rec.snapshot = procguard.snapshot([rec.pid])
+            self._hide_taskbar_icons()
             await self._sleep(random.uniform(1.0, 2.5))
 
     async def _stop_browser(self, rec: _Chrome) -> None:
@@ -536,6 +549,7 @@ class ZendriverPool:
             tab = await browser.create_context("about:blank", new_window=True,
                                                proxy_server=normalize_proxy(cfg.proxy_for(slot.index)))
             slot.context_id = tab.target.browser_context_id
+            self._hide_taskbar_icons()    # the new context has its own window
         slot.tab, slot.gen = tab, rec.gen
         if cfg.block_resources:
             await tab.send(cdp.network.enable())

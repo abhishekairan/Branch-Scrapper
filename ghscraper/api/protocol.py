@@ -21,6 +21,7 @@ NOT_FOUND = -32004
 EXPORT_FAILED = -32005
 BAD_WORKER = -32006        # worker index out of range for the current run
 BROWSER_ERROR = -32007     # the browser slot rejected / failed the operation
+STORAGE_FAILED = -32008    # storage.move could not copy / verify / switch; nothing was changed
 
 # --- WebSocket close codes
 CLOSE_AUTH = 4401          # missing / wrong / late auth message

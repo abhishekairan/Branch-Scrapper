@@ -12,10 +12,75 @@ export type Layout = 'grid' | 'single' | 'list'
 const LAYOUTS = ['grid', 'single', 'list'] as const
 
 export const GRID_FPS = 2
+/** frame width asked for per tile is at least this (CSS px x dpr is used when the tile is wider) ... */
 export const GRID_MAX_WIDTH = 480
+/** ... and at most this: Grid streams are 2 fps thumbnails, 1-column tiles get wider frames but not Single-sized ones */
+export const GRID_MAX_WIDTH_CAP = 960
 export const SINGLE_FPS = 12
 export const SINGLE_MAX_WIDTH_CAP = 1280
 const DEBOUNCE_MS = 200
+
+// ---------------------------------------------------------------- grid options (per viewer, localStorage)
+
+export type GridColumns = 0 | 1 | 2 | 3 | 4 // 0 = auto (responsive)
+export type GridDensity = 'compact' | 'comfortable' | 'large'
+export interface GridPrefs {
+  columns: GridColumns
+  density: GridDensity
+  showUrl: boolean
+  showStatus: boolean
+  showRam: boolean
+}
+export const DEFAULT_GRID_PREFS: GridPrefs = {
+  columns: 0,
+  density: 'comfortable',
+  showUrl: true,
+  showStatus: true,
+  showRam: true,
+}
+const GRID_KEY = 'gs.grid'
+
+/** Validate whatever came out of storage; unknown or malformed fields fall back to the defaults. */
+export function parseGridPrefs(raw: string | null): GridPrefs {
+  const out: GridPrefs = { ...DEFAULT_GRID_PREFS }
+  if (!raw) return out
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>
+    if (o && typeof o === 'object') {
+      if (o.columns === 0 || o.columns === 1 || o.columns === 2 || o.columns === 3 || o.columns === 4) out.columns = o.columns
+      if (o.density === 'compact' || o.density === 'comfortable' || o.density === 'large') out.density = o.density
+      if (typeof o.showUrl === 'boolean') out.showUrl = o.showUrl
+      if (typeof o.showStatus === 'boolean') out.showStatus = o.showStatus
+      if (typeof o.showRam === 'boolean') out.showRam = o.showRam
+    }
+  } catch {
+    /* corrupt value: defaults */
+  }
+  return out
+}
+
+function loadGridPrefs(): GridPrefs {
+  try {
+    return parseGridPrefs(localStorage.getItem(GRID_KEY))
+  } catch {
+    return { ...DEFAULT_GRID_PREFS }
+  }
+}
+
+export const gridPrefs = $state<GridPrefs>(loadGridPrefs())
+
+export function setGridPrefs(patch: Partial<GridPrefs>): void {
+  Object.assign(gridPrefs, patch)
+  try {
+    localStorage.setItem(GRID_KEY, JSON.stringify({ ...gridPrefs }))
+  } catch {
+    /* storage unavailable: the choice still applies for this session */
+  }
+}
+
+export function resetGridPrefs(): void {
+  setGridPrefs({ ...DEFAULT_GRID_PREFS })
+}
 
 function loadLayout(): Layout {
   try {
@@ -35,6 +100,8 @@ export const view = $state({
   visible: {} as Record<number, boolean>,
   /** CSS width of the Single canvas box, for choosing max_width */
   singleCssWidth: 0,
+  /** tile index -> CSS width of its drawn preview (Grid), for choosing max_width */
+  tileCssWidth: {} as Record<number, number>,
   /** the Browsers screen is mounted */
   screenActive: false,
   docVisible: typeof document === 'undefined' ? true : document.visibilityState === 'visible',
@@ -56,6 +123,18 @@ export function reportVisible(index: number, on: boolean): void {
   if (view.visible[index] !== on) view.visible[index] = on
 }
 
+export function reportTileWidth(index: number, cssWidth: number): void {
+  const w = Math.round(cssWidth)
+  if (view.tileCssWidth[index] !== w) view.tileCssWidth[index] = w
+}
+
+/** CSS px -> frame width to request: device pixels, in coarse steps so a resize does not re-send on every pixel. */
+export function frameWidthFor(cssWidth: number, min: number, max: number, fallback: number): number {
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const px = Math.ceil((cssWidth * dpr) / 40) * 40
+  return Math.max(min, Math.min(max, px || fallback))
+}
+
 export interface ViewRequest {
   indices: number[]
   fps: number
@@ -72,14 +151,15 @@ export function desiredView(): ViewRequest {
       .filter(([i, on]) => on && Number(i) < count)
       .map(([i]) => Number(i))
       .sort((a, b) => a - b)
-    return { indices, fps: GRID_FPS, maxWidth: GRID_MAX_WIDTH }
+    // one width for all tiles (they share a column width): the widest visible one wins
+    let w = 0
+    for (const i of indices) w = Math.max(w, view.tileCssWidth[i] ?? 0)
+    return { indices, fps: GRID_FPS, maxWidth: frameWidthFor(w, GRID_MAX_WIDTH, GRID_MAX_WIDTH_CAP, GRID_MAX_WIDTH) }
   }
   // single
   const i = view.selected
   if (i >= count || !view.visible[i]) return none
-  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
-  const px = Math.ceil((view.singleCssWidth * dpr) / 40) * 40 // coarse steps: avoid re-sending on every pixel
-  return { indices: [i], fps: SINGLE_FPS, maxWidth: Math.max(160, Math.min(SINGLE_MAX_WIDTH_CAP, px || 640)) }
+  return { indices: [i], fps: SINGLE_FPS, maxWidth: frameWidthFor(view.singleCssWidth, 160, SINGLE_MAX_WIDTH_CAP, 640) }
 }
 
 // ---------------------------------------------------------------- frame fan-out

@@ -1,6 +1,6 @@
 // The only module that talks to the Tauri shell. Everything else uses lib/client.ts and lib/app.svelte.ts.
 
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type { ConnectInfo } from './api.ts'
 
@@ -49,6 +49,58 @@ export function restartSidecar(): Promise<SidecarInfo> {
   return invoke<SidecarInfo>('restart_sidecar')
 }
 
+// ------------------------------------------------------------------ in-app updates (src-tauri/src/updates.rs)
+
+/** An update found by the shell. `body` is the release notes: untrusted text, render it as text only. */
+export interface UpdateInfo {
+  version: string
+  currentVersion: string
+  date?: string | null
+  body?: string | null
+}
+
+/** `downloading` -> `stopping` (backend shut down) -> `installing` (installer starts, the app exits). */
+export interface InstallProgress {
+  phase: 'downloading' | 'stopping' | 'installing'
+  downloaded: number
+  total: number | null
+}
+
+/** Tauri rejects an invoke with the command's error value (a string here), not with an Error. */
+function shellError(e: unknown): Error {
+  return e instanceof Error ? e : new Error(String(e))
+}
+
+/** Version of the running shell (tauri.conf.json). */
+export async function shellVersion(): Promise<string> {
+  if (!inTauri) return ''
+  return invoke<string>('app_version')
+}
+
+/** Ask the update endpoint for a newer version. null = up to date. Rejects with a readable sentence. */
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  if (!inTauri) throw new Error('Updates are only available in the installed app.')
+  try {
+    return await invoke<UpdateInfo | null>('check_for_update')
+  } catch (e) {
+    throw shellError(e)
+  }
+}
+
+/**
+ * Download the update found by the last `checkForUpdate`, verify its signature, stop the backend, run the
+ * installer. On success the app exits (the installer relaunches it) so this promise never resolves.
+ */
+export async function installUpdate(onProgress: (p: InstallProgress) => void): Promise<void> {
+  const channel = new Channel<InstallProgress>()
+  channel.onmessage = onProgress
+  try {
+    await invoke('install_update', { onEvent: channel })
+  } catch (e) {
+    throw shellError(e)
+  }
+}
+
 export interface ShellHandlers {
   onStarting?: () => void
   onReady?: (info: SidecarInfo) => void
@@ -77,6 +129,43 @@ export async function pickSavePath(opts: {
 }): Promise<string | null> {
   const { save } = await import('@tauri-apps/plugin-dialog')
   return save(opts)
+}
+
+/**
+ * Native "choose a folder" dialog. Returns the absolute path or null if cancelled. Uses the same
+ * `dialog:allow-open` permission as pickOpenPaths. In a plain browser (dev harness) there is no dialog: the
+ * test driver may provide `window.__pickFolder`.
+ */
+export async function pickFolder(opts: { title?: string; defaultPath?: string }): Promise<string | null> {
+  if (!inTauri) {
+    const hook = import.meta.env.DEV ? (window as { __pickFolder?: () => string | null }).__pickFolder : undefined
+    return hook ? hook() : null
+  }
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const r = await open({ ...opts, multiple: false, directory: true })
+  return typeof r === 'string' ? r : null
+}
+
+/** Show a file in the system file manager (selected in its folder). Needs `opener:allow-reveal-item-in-dir`. */
+export async function revealInFolder(path: string): Promise<boolean> {
+  if (!inTauri) return false
+  const { revealItemInDir } = await import('@tauri-apps/plugin-opener')
+  await revealItemInDir(path)
+  return true
+}
+
+/**
+ * Make the native window chrome (title bar) follow the app theme; null = follow the system. Needs
+ * `core:window:allow-set-theme`. Best effort: never throws, does nothing outside the shell.
+ */
+export async function setWindowTheme(mode: 'light' | 'dark' | 'system'): Promise<void> {
+  if (!inTauri) return
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    await getCurrentWindow().setTheme(mode === 'system' ? null : mode)
+  } catch (e) {
+    console.warn('could not set the window theme', e)
+  }
 }
 
 /**

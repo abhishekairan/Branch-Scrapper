@@ -10,14 +10,15 @@ import sys
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from .. import __version__
+from .. import __version__, relocate
 from ..browser.detect import browser_status
-from ..config import MAX_BROWSERS, SORT_CHOICES, Config
+from ..config import MAX_BROWSERS, SORT_CHOICES, Config, Location, clear_location_pointer
 from ..core.runmanager import RunManager, apply_overrides, validate_config
 from ..exporters import export_rows
 from ..filters import FILTERS
 from ..store import Store, importer, query
-from .protocol import (BROWSER_ERROR, EXPORT_FAILED, INVALID_PARAMS, METHOD_NOT_FOUND, NOT_FOUND, RpcError)
+from .protocol import (BROWSER_ERROR, EXPORT_FAILED, INVALID_PARAMS, METHOD_NOT_FOUND, NOT_FOUND, RUN_ACTIVE,
+                       STORAGE_FAILED, RpcError)
 from .screen import DEFAULT_FPS, DEFAULT_MAX_WIDTH, ScreenRelay
 from .server import Client
 
@@ -68,10 +69,14 @@ def _abs_path(value: Any, name: str = "path") -> Path:
 class Api:
     def __init__(self, *, manager: RunManager, store: Store, relay: ScreenRelay, data_dir: Path,
                  db_path: Path, request_shutdown: Callable[[], None], pid: int | None = None,
-                 test_mode: bool = False, migration: str = "none"):
+                 test_mode: bool = False, migration: str = "none", location: Location | None = None):
         self.manager, self.store, self.relay = manager, store, relay
         self.migration = migration     # result of the Ghost Scraper -> Branch Scrapper data copy at startup
         self.data_dir, self.db_path = data_dir, db_path
+        # How data_dir was chosen. None (tests, embedding) = fixed: storage.move / storage.reset are refused.
+        self.location = location
+        self._moving = False           # storage.move is copying: no run may start
+        self._pending_dir: Path | None = None    # a move/reset was done; the sidecar must restart to use it
         self._request_shutdown = request_shutdown
         self.pid = pid if pid is not None else os.getpid()
         self.test_mode = test_mode
@@ -88,13 +93,23 @@ class Api:
             "datasets.list": self.datasets_list, "datasets.save": self.datasets_save,
             "datasets.delete": self.datasets_delete, "runs.list": self.runs_list,
             "export.write": self.export_write,
+            "storage.move": self.storage_move, "storage.reset": self.storage_reset,
         }
 
     # ------------------------------------------------------------------ dispatcher protocol
+    _WRITES_BLOCKED_AFTER_MOVE = frozenset({
+        "config.update", "run.start", "run.preview_counts", "data.delete", "data.import_json",
+        "datasets.save", "datasets.delete",
+    })
+
     async def handle(self, client: Client, method: str, params: dict) -> Any:
         fn = self._methods.get(method)
         if fn is None:
             raise RpcError(METHOD_NOT_FOUND, f"method not found: {method}")
+        if self._pending_dir is not None and method in self._WRITES_BLOCKED_AFTER_MOVE:
+            # The data was copied/switched to another folder; anything written now would land in the old one
+            # and be missing after the restart.
+            raise RpcError(INVALID_PARAMS, "the data folder was changed; restart the backend before making changes")
         try:
             return await fn(client, params)
         except ValueError as e:      # Store / query validation errors
@@ -113,7 +128,24 @@ class Api:
                 "db_path": str(self.db_path), "config_path": str(self.manager.config_path),
                 "schema_version": schema, "run_active": self.manager.active, "test_mode": self.test_mode,
                 "max_browsers": MAX_BROWSERS, "frozen": bool(getattr(sys, "frozen", False)),
-                "browser": browser, "migration": self.migration}
+                "browser": browser, "migration": self.migration,
+                "storage": await asyncio.to_thread(self._storage_info)}
+
+    def _storage_info(self) -> dict:
+        loc = self.location
+        db_bytes = 0
+        for suffix in ("", "-wal"):
+            try:
+                db_bytes += (self.db_path.parent / (self.db_path.name + suffix)).stat().st_size
+            except OSError:
+                pass
+        default_dir = loc.default_dir if loc else self.data_dir
+        custom = bool(loc and loc.source == "pointer")
+        return {"source": loc.source if loc else "arg", "custom": custom,
+                "can_change": bool(loc and loc.can_change), "default_dir": str(default_dir),
+                "default_has_data": custom and (default_dir / "data.db").is_file(),
+                "db_bytes": db_bytes, "problem": loc.problem if loc else None,
+                "pending_restart": str(self._pending_dir) if self._pending_dir else None}
 
     async def app_shutdown(self, client: Client, p: dict) -> dict:
         asyncio.get_running_loop().call_later(0.1, self._request_shutdown)   # let the reply go out first
@@ -146,10 +178,16 @@ class Api:
         return result
 
     # ------------------------------------------------------------------ run
+    def _not_moving(self) -> None:
+        if self._moving:
+            raise RpcError(RUN_ACTIVE, "the data folder is being moved; try again in a moment")
+
     async def run_start(self, client: Client, p: dict) -> dict:
+        self._not_moving()
         return await self.manager.start(_param(p, "overrides", dict, {}, nullable=True))
 
     async def run_preview(self, client: Client, p: dict) -> dict:
+        self._not_moving()
         return await self.manager.preview_counts(_param(p, "overrides", dict, {}, nullable=True))
 
     async def run_stop(self, client: Client, p: dict) -> dict:
@@ -238,6 +276,66 @@ class Api:
 
     async def runs_list(self, client: Client, p: dict) -> dict:
         return {"runs": await asyncio.to_thread(self.store.list_runs)}
+
+    # ------------------------------------------------------------------ storage
+    def _storage_guard(self) -> Location:
+        """Common refusals of storage.move / storage.reset (nothing has been touched yet)."""
+        loc = self.location
+        if loc is None or not loc.can_change:
+            why = {"arg": "--data-dir", "env": "GHOSTSCRAPER_HOME"}.get(loc.source if loc else "arg", "the host")
+            raise RpcError(INVALID_PARAMS, f"the data folder is fixed by {why} and cannot be changed from the app")
+        if self._pending_dir is not None:
+            raise RpcError(INVALID_PARAMS, "a change of data folder is waiting for a restart of the backend")
+        if self.manager.active or self._moving:
+            raise RpcError(RUN_ACTIVE, "a run is active; stop it before changing the data folder")
+        return loc
+
+    @staticmethod
+    def _move_rpc_error(e: relocate.MoveError) -> RpcError:
+        return RpcError(INVALID_PARAMS if e.kind == "invalid" else STORAGE_FAILED, str(e))
+
+    async def storage_move(self, client: Client, p: dict) -> dict:
+        """Copy the data to another folder (or switch to data already there) and point the app at it.
+        `dry_run: true` only validates and reports what would happen."""
+        loc = self._storage_guard()
+        path = _param(p, "path", str)
+        dry_run = _param(p, "dry_run", bool, False)
+        if dry_run:
+            try:
+                plan = await asyncio.to_thread(relocate.plan_move, self.data_dir, path, loc.default_dir)
+            except relocate.MoveError as e:
+                raise self._move_rpc_error(e) from e
+            return {**plan.describe(), "dry_run": True}
+
+        self._moving = True            # set before the first await: no run can slip in
+        try:
+            async with self.manager._write_lock:        # no data.delete / import while the files are copied
+                if self.manager.active:
+                    raise RpcError(RUN_ACTIVE, "a run is active; stop it before changing the data folder")
+                try:
+                    plan = await asyncio.to_thread(relocate.plan_move, self.data_dir, path, loc.default_dir)
+                    result = await asyncio.to_thread(relocate.move, loc.default_dir, plan)
+                except relocate.MoveError as e:
+                    raise self._move_rpc_error(e) from e
+        finally:
+            self._moving = False
+        self._pending_dir = result.plan.target
+        log.info("storage.move: %s -> %s (%s)", result.plan.source, result.plan.target, result.plan.mode)
+        return {"restart_required": True, **result.plan.describe(), "tables": result.tables or {},
+                "warnings": result.warnings}
+
+    async def storage_reset(self, client: Client, p: dict) -> dict:
+        """Go back to the default data folder by removing the pointer file. Data at the custom folder is kept."""
+        loc = self._storage_guard()
+        if loc.source != "pointer" and not loc.problem:
+            raise RpcError(INVALID_PARAMS, "the default data folder is already in use")
+        try:
+            await asyncio.to_thread(clear_location_pointer, loc.default_dir)
+        except OSError as e:
+            raise RpcError(STORAGE_FAILED, f"could not remove {loc.pointer_file}: {e}") from e
+        self._pending_dir = loc.default_dir
+        log.info("storage.reset: back to %s (kept %s)", loc.default_dir, self.data_dir)
+        return {"restart_required": True, "data_dir": str(loc.default_dir), "kept": str(self.data_dir)}
 
     # ------------------------------------------------------------------ export
     async def export_write(self, client: Client, p: dict) -> dict:

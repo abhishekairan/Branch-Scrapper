@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import BrowserCanvas from '../components/BrowserCanvas.svelte'
   import BrowserTile from '../components/BrowserTile.svelte'
+  import GridOptions from '../components/GridOptions.svelte'
   import Icon from '../components/Icon.svelte'
   import WorkerChip from '../components/WorkerChip.svelte'
   import {
@@ -14,7 +15,7 @@
     takeControl,
   } from '../lib/app.svelte.ts'
   import { formatBytes } from '../lib/format.ts'
-  import { setLayout, view, type Layout } from '../lib/view.svelte.ts'
+  import { gridPrefs, setLayout, view, type Layout } from '../lib/view.svelte.ts'
 
   onMount(() => {
     view.screenActive = true
@@ -67,6 +68,10 @@
       {/each}
     </div>
 
+    {#if view.layout === 'grid'}
+      <GridOptions />
+    {/if}
+
     {#if view.layout === 'single' && run.workers.length > 1}
       <div class="seg" role="group" aria-label="Worker">
         {#each run.workers as w (w.index)}
@@ -98,7 +103,7 @@
       </div>
     </div>
   {:else if view.layout === 'grid'}
-    <div class="grid">
+    <div class="grid {gridPrefs.density}" class:fixed={gridPrefs.columns > 0} style:--cols={gridPrefs.columns || null}>
       {#each run.workers as w (w.index)}
         <BrowserTile worker={w} onexpand={() => expand(w.index)} />
       {/each}
@@ -221,10 +226,20 @@
     min-height: 0;
     overflow-y: auto;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    --min-tile: 340px;
+    grid-template-columns: repeat(auto-fill, minmax(var(--min-tile), 1fr));
     gap: var(--gap);
     align-content: start;
     padding-bottom: 2px;
+  }
+  .grid.compact {
+    --min-tile: 280px;
+  }
+  .grid.large {
+    --min-tile: 460px;
+  }
+  .grid.fixed {
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   }
 
   .list {
@@ -280,6 +295,7 @@
     color: var(--text-2);
   }
   .stage {
+    position: relative;
     flex: 1;
     min-height: 0;
     overflow: hidden;

@@ -3,6 +3,16 @@
 # Steps mirror packaging/README.md (the local build). This workflow never creates a release: it only produces
 # workflow artifacts. Code signing is OFF until the repository variable SIGNPATH_ENABLED is set to 'true'
 # (see docs/signpath-application.md for the variables and the one secret that must exist first).
+#
+# In-app updates: `tauri build` also signs the installer for the Tauri updater (minisign key in the repository
+# secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD) and this workflow writes `latest.json`
+# (packaging/make_latest_json.py). Whoever publishes the release uploads BranchScrapper_<version>_x64-setup.exe and
+# latest.json to it; the app reads https://github.com/<repo>/releases/latest/download/latest.json.
+#
+# IMPORTANT, when SignPath signing is enabled: Authenticode signing changes the bytes of the installer, so the
+# updater signature made in the build job no longer matches the signed file. The `sign` job therefore signs the
+# code-signed exe again with `tauri signer sign` and regenerates latest.json; publish the files from the
+# `signed-installer` artifact, never the `.sig` / latest.json of `unsigned-installer`.
 name: Build Windows installer
 
 on:
@@ -30,6 +40,7 @@ jobs:
     timeout-minutes: 60
     outputs:
       signing-artifact-id: ${{ steps.upload-for-signing.outputs.artifact-id }}
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         shell: pwsh
@@ -38,6 +49,27 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Read the app version and check it is in sync
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $v = (Get-Content app/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "tauri.conf.json version '$v' is not x.y.z" }
+          $py = [regex]::Match((Get-Content ghscraper/__init__.py -Raw), '__version__ = "([^"]+)"').Groups[1].Value
+          $pkg = (Get-Content app/package.json -Raw | ConvertFrom-Json).version
+          $cargo = [regex]::Match((Get-Content app/src-tauri/Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          if (@($py, $pkg, $cargo) | Where-Object { $_ -ne $v }) {
+            throw "versions differ: tauri.conf.json $v, ghscraper $py, package.json $pkg, Cargo.toml $cargo"
+          }
+          if ($env:REF_TYPE -eq 'tag' -and $env:REF_NAME -ne "v$v") {
+            throw "tag $($env:REF_NAME) does not match the app version v$v"
+          }
+          if (-not (Test-Path "docs/release-notes-v$v.md")) { throw "docs/release-notes-v$v.md is missing" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "Building Branch Scrapper $v" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
@@ -76,18 +108,39 @@ jobs:
       - name: Freeze the Python sidecar (PyInstaller) and stage it
         run: python packaging/build_sidecar.py
 
-      - name: Build the NSIS installer (tauri build)
+      # `bundle.createUpdaterArtifacts` is on, so tauri build signs the installer for the updater and fails without
+      # the key. The secrets are exposed to this one step only.
+      - name: Build the NSIS installer and its updater signature (tauri build)
         working-directory: app
-        run: npx tauri build
-
-      - name: Collect installer and compute SHA-256
-        id: collect
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          $installers = @(Get-ChildItem -Path app/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' -File)
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            throw "Secret TAURI_SIGNING_PRIVATE_KEY is not available (forks do not get secrets). It must hold the contents of updater.key."
+          }
+          npx tauri build
+
+      # The installer is uploaded under the name latest.json points at (no space in the name). The .sig made by
+      # tauri build signs these exact bytes; renaming does not change them.
+      - name: Collect installer, updater signature and latest.json
+        id: collect
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $bundle = 'app/src-tauri/target/release/bundle/nsis'
+          $installers = @(Get-ChildItem -Path $bundle -Filter '*-setup.exe' -File)
           if ($installers.Count -ne 1) { throw "expected exactly one *-setup.exe, found $($installers.Count)" }
-          $exe = $installers[0]
+          $built = $installers[0]
+          if (-not (Test-Path -LiteralPath "$($built.FullName).sig")) { throw "tauri build did not write $($built.Name).sig (is bundle.createUpdaterArtifacts on?)" }
+          $name = "BranchScrapper_$($env:VERSION)_x64-setup.exe"
+          if ($built.Name -replace ' ', '' -ne $name) { throw "unexpected installer name '$($built.Name)' for version $($env:VERSION)" }
           New-Item -ItemType Directory -Force -Path out/unsigned | Out-Null
-          Copy-Item -LiteralPath $exe.FullName -Destination out/unsigned/
+          Copy-Item -LiteralPath $built.FullName -Destination "out/unsigned/$name"
+          Copy-Item -LiteralPath "$($built.FullName).sig" -Destination "out/unsigned/$name.sig"
+          python packaging/make_latest_json.py --version $env:VERSION --sig "out/unsigned/$name.sig" --notes "docs/release-notes-v$($env:VERSION).md" --out out/unsigned/latest.json
+          if ($LASTEXITCODE -ne 0) { throw "make_latest_json.py failed" }
+          $exe = Get-Item -LiteralPath "out/unsigned/$name"
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName).Hash.ToLower()
           # sha256sum-compatible format: "<hash>  <file name>"
           "$hash  $($exe.Name)" | Out-File -FilePath "out/unsigned/$($exe.Name).sha256" -Encoding ascii
@@ -95,6 +148,8 @@ jobs:
           $sig = (Get-AuthenticodeSignature -LiteralPath $exe.FullName).Status
           "Authenticode status of the unsigned build: $sig" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
+      # Contents: the installer, its .sig, latest.json and the .sha256 (the name is kept because the SignPath
+      # setup refers to it).
       - name: Upload unsigned installer
         uses: actions/upload-artifact@v7
         with:
@@ -129,6 +184,29 @@ jobs:
       run:
         shell: pwsh
     steps:
+      # Needed only for the updater re-signing step below: the Tauri CLI (`tauri signer sign`), the manifest script
+      # and the release notes.
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies (Tauri CLI)
+        working-directory: app
+        run: npm ci
+
       - name: Submit signing request to SignPath
         id: signpath
         uses: signpath/github-action-submit-signing-request@v3
@@ -155,6 +233,25 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName).Hash.ToLower()
           "$hash  $($exe.Name)" | Out-File -FilePath "out/signed/$($exe.Name).sha256" -Encoding ascii
           "SignPath signing request: ${{ steps.signpath.outputs.signing-request-web-url }}" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      # The Authenticode signature changed the installer's bytes, so the updater signature from the build job is
+      # void for this file. Sign the signed exe again (bound to the app version, which the app requires:
+      # requireSignedVersion) and write a latest.json that carries the new signature.
+      - name: Re-sign the code-signed installer for the updater and write latest.json
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "Secret TAURI_SIGNING_PRIVATE_KEY is not available." }
+          $exe = Get-Item "out/signed/BranchScrapper_$($env:VERSION)_x64-setup.exe"
+          Push-Location app
+          npx tauri signer sign --app-version $env:VERSION $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "tauri signer sign failed" }
+          Pop-Location
+          if (-not (Test-Path -LiteralPath "$($exe.FullName).sig")) { throw "no .sig was written next to the signed installer" }
+          python packaging/make_latest_json.py --version $env:VERSION --sig "$($exe.FullName).sig" --notes "docs/release-notes-v$($env:VERSION).md" --out out/signed/latest.json
+          if ($LASTEXITCODE -ne 0) { throw "make_latest_json.py failed" }
 
       - name: Upload signed installer
         uses: actions/upload-artifact@v7
