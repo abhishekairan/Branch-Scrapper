@@ -16,6 +16,7 @@
   import { inTauri, revealInFolder } from '../lib/tauri.ts'
   import { THEMES, theme } from '../lib/theme.svelte.ts'
   import type { ThemeMode } from '../lib/theme.svelte.ts'
+  import { ZOOM_STEPS, formatZoom, setZoom, stepZoom, zoom } from '../lib/zoom.svelte.ts'
 
   const THEME_LABEL: Record<ThemeMode, string> = { system: 'System', light: 'Light', dark: 'Dark' }
 
@@ -89,6 +90,29 @@
         </div>
         <p class="muted">System follows your operating system's light or dark setting. The choice is remembered.</p>
         {#if themeError}<p class="msg warn">{themeError}</p>{/if}
+      </div>
+    </section>
+
+    <section class="card">
+      <header>Interface size</header>
+      <div class="body stack">
+        <div class="row wrap">
+          <button class="btn sm" aria-label="Smaller" title="Smaller (Ctrl + -)" disabled={!zoom.supported || zoom.factor <= ZOOM_STEPS[0]} onclick={() => void stepZoom(-1)}>−</button>
+          <div class="seg" role="group" aria-label="Interface size">
+            {#each ZOOM_STEPS as z (z)}
+              <button aria-pressed={zoom.factor === z} disabled={!zoom.supported} onclick={() => void setZoom(z)}>{formatZoom(z)}</button>
+            {/each}
+          </div>
+          <button class="btn sm" aria-label="Larger" title="Larger (Ctrl + =)" disabled={!zoom.supported || zoom.factor >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onclick={() => void stepZoom(1)}>+</button>
+        </div>
+        {#if zoom.supported}
+          <p class="muted">
+            Makes text, buttons and the browser previews larger or smaller. Shortcuts: Ctrl + = larger, Ctrl + −
+            smaller, Ctrl + 0 back to 100%. Remembered on this computer.
+          </p>
+        {:else}
+          <p class="muted">Available in the installed app. In a web browser, use the browser's own zoom.</p>
+        {/if}
       </div>
     </section>
 

@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimum for the main window: receive events, native save/open dialogs (open also picks the data folder), following the app theme in the title bar, showing the data folder in the file manager (reveal only: it opens nothing), and opening https links (repo pages, websites) in the system browser. The sidecar commands (sidecar_info, restart_sidecar) and the update commands (app_version, check_for_update, install_update) are app commands and need no grant; the updater plugin's own JS commands are deliberately not granted.",
+  "description": "Minimum for the main window: receive events, native save/open dialogs (open also picks the data folder), following the app theme in the title bar, zooming the app's own page (Settings > Interface size), showing the data folder in the file manager (reveal only: it opens nothing), and opening https links (repo pages, websites) in the system browser. The sidecar commands (sidecar_info, restart_sidecar) and the update commands (app_version, check_for_update, install_update) are app commands and need no grant; the updater plugin's own JS commands are deliberately not granted.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:event:default",
     "core:window:allow-set-theme",
+    "core:webview:allow-set-webview-zoom",
     "dialog:allow-save",
     "dialog:allow-open",
     "opener:allow-reveal-item-in-dir",

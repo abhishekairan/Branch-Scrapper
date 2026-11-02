@@ -1,6 +1,6 @@
 [package]
 name = "branch-scrapper"
-version = "0.1.2"
+version = "0.1.3"
 description = "Branch Scrapper desktop shell"
 authors = ["Abhishek Airan"]
 license = "AGPL-3.0-only"

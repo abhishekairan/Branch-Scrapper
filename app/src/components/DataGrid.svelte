@@ -11,8 +11,8 @@
   } from '../lib/datafilters.ts'
   import type { ColumnDef } from '../lib/datafilters.ts'
   import {
-    ROW_H,
     colWidth,
+    rowHeight,
     flt,
     grid,
     moveActive,
@@ -36,6 +36,7 @@
   let viewH = $state(600)
   const now = Date.now()
 
+  const ROW_H = $derived(rowHeight())
   const cols = $derived(ui.columns.map((k) => COLUMN_BY_KEY[k]).filter((c): c is ColumnDef => !!c))
   const totalW = $derived(CHECK_W + cols.reduce((n, c) => n + colWidth(c.key), 0))
   const total = $derived(grid.total ?? 0)
@@ -166,6 +167,11 @@
   role="grid"
   aria-label="Results"
   aria-rowcount={total}
+  class:striped={ui.table.striped}
+  class:lines={ui.table.colLines}
+  class:frozen={ui.table.freezeName}
+  class:tall={ui.table.density === 'tall'}
+  class:compact={ui.table.density === 'compact'}
 >
   <div class="head" style:width="{totalW}px" role="row">
     <div class="cell check" style:width="{CHECK_W}px" role="columnheader">
@@ -183,6 +189,7 @@
       {@const s = sortOf(c.key)}
       <div
         class="cell hcell"
+        class:namecol={c.key === 'full_name'}
         class:num={c.kind === 'num'}
         class:sortable={c.sortable}
         style:width="{colWidth(c.key)}px"
@@ -244,7 +251,15 @@
           {/if}
         </div>
         {#each cols as c (c.key)}
-          <div class="cell" class:num={c.kind === 'num'} class:center={c.kind === 'bool'} style:width="{colWidth(c.key)}px" role="gridcell">
+          <div
+            class="cell"
+            class:namecol={c.key === 'full_name'}
+            class:textcell={c.kind === 'text'}
+            class:num={c.kind === 'num'}
+            class:center={c.kind === 'bool'}
+            style:width="{colWidth(c.key)}px"
+            role="gridcell"
+          >
             {#if !row}
               {#if c.key === 'full_name'}<span class="skel"></span>{/if}
             {:else if c.kind === 'num'}
@@ -309,16 +324,50 @@
     background: var(--surface);
     cursor: default;
   }
-  .rrow.odd {
+  .striped .rrow.odd {
     background: var(--surface-2);
   }
-  .rrow:hover {
+  .lines .cell + .cell {
+    border-left: 1px solid var(--border);
+  }
+  .lines .head .cell + .cell {
+    border-left-color: var(--border-strong);
+  }
+  /* frozen Repository column: sticks right after the (always sticky) checkbox column */
+  .frozen .cell.namecol {
+    position: sticky;
+    left: 38px; /* CHECK_W */
+    z-index: 2;
+    background: inherit;
+    box-shadow: 1px 0 0 var(--border-strong);
+  }
+  .frozen .head .cell.namecol {
+    background: var(--surface-2);
+  }
+  .compact .cell {
+    font-size: var(--fs-sm);
+  }
+  .compact .tag {
+    height: 16px;
+    line-height: 16px;
+  }
+  /* tall rows: long text gets two lines instead of being cut at the first */
+  .tall .cell.textcell > span {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.35;
+  }
+  /* `.scroller` prefix: as specific as `.striped .rrow.odd`, and later, so these win over the stripes */
+  .scroller .rrow:hover {
     background: color-mix(in srgb, var(--accent-weak) 55%, var(--surface));
   }
-  .rrow.picked {
+  .scroller .rrow.picked {
     background: var(--accent-weak);
   }
-  .rrow.active {
+  .scroller .rrow.active {
     background: var(--accent-weak);
     box-shadow: inset 3px 0 0 var(--accent);
   }

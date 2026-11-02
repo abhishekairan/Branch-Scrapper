@@ -1,28 +1,36 @@
 <script lang="ts">
   import {
     DEFAULT_GRID_PREFS,
+    GRID_COLUMNS,
     gridPrefs,
     resetGridPrefs,
     setGridPrefs,
     type GridColumns,
     type GridDensity,
+    type GridShape,
+    type GridSpacing,
   } from '../lib/view.svelte.ts'
 
   let open = $state(false)
   let root: HTMLDivElement | undefined = $state()
   let trigger: HTMLButtonElement | undefined = $state()
 
-  const columns: { id: GridColumns; label: string }[] = [
-    { id: 0, label: 'Auto' },
-    { id: 1, label: '1' },
-    { id: 2, label: '2' },
-    { id: 3, label: '3' },
-    { id: 4, label: '4' },
-  ]
+  const columns: { id: GridColumns; label: string }[] = GRID_COLUMNS.map((n) => ({ id: n, label: n === 0 ? 'Auto' : String(n) }))
   const densities: { id: GridDensity; label: string }[] = [
     { id: 'compact', label: 'Compact' },
     { id: 'comfortable', label: 'Comfortable' },
     { id: 'large', label: 'Large' },
+  ]
+  const spacings: { id: GridSpacing; label: string }[] = [
+    { id: 'tight', label: 'Tight' },
+    { id: 'normal', label: 'Normal' },
+    { id: 'roomy', label: 'Roomy' },
+  ]
+  const shapes: { id: GridShape; label: string; title: string }[] = [
+    { id: 'auto', label: 'Auto', title: 'Follows the tile size' },
+    { id: '16/9', label: '16:9', title: 'Widescreen' },
+    { id: '16/10', label: '16:10', title: 'Laptop screen' },
+    { id: '4/3', label: '4:3', title: 'Taller preview' },
   ]
 
   const changed = $derived(
@@ -78,10 +86,27 @@
           {/each}
         </div>
       </div>
+      <div class="opt">
+        <span class="lbl" id="go-gap">Spacing</span>
+        <div class="seg" role="group" aria-labelledby="go-gap">
+          {#each spacings as s (s.id)}
+            <button aria-pressed={gridPrefs.spacing === s.id} onclick={() => setGridPrefs({ spacing: s.id })}>{s.label}</button>
+          {/each}
+        </div>
+      </div>
+      <div class="opt">
+        <span class="lbl" id="go-shape">Preview shape</span>
+        <div class="seg" role="group" aria-labelledby="go-shape">
+          {#each shapes as s (s.id)}
+            <button aria-pressed={gridPrefs.shape === s.id} title={s.title} onclick={() => setGridPrefs({ shape: s.id })}>{s.label}</button>
+          {/each}
+        </div>
+      </div>
       <div class="checks">
         <label><input type="checkbox" checked={gridPrefs.showUrl} onchange={(e) => setGridPrefs({ showUrl: e.currentTarget.checked })} /> Show page URL</label>
         <label><input type="checkbox" checked={gridPrefs.showStatus} onchange={(e) => setGridPrefs({ showStatus: e.currentTarget.checked })} /> Show status caption</label>
         <label><input type="checkbox" checked={gridPrefs.showRam} onchange={(e) => setGridPrefs({ showRam: e.currentTarget.checked })} /> Show RAM</label>
+        <label><input type="checkbox" checked={gridPrefs.hideFinished} onchange={(e) => setGridPrefs({ hideFinished: e.currentTarget.checked })} /> Hide finished browsers</label>
       </div>
       <div class="foot">
         <span class="muted hint">Saved on this computer.</span>
@@ -105,7 +130,9 @@
     top: calc(100% + 6px);
     left: 0;
     z-index: 20;
-    width: 300px;
+    width: 320px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
     padding: 12px;
     display: flex;
     flex-direction: column;

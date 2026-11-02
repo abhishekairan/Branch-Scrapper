@@ -3,6 +3,7 @@
   import { init, nav } from './lib/app.svelte.ts'
   import { initTheme } from './lib/theme.svelte.ts'
   import { initView } from './lib/view.svelte.ts'
+  import { initZoom } from './lib/zoom.svelte.ts'
   import ConnBanner from './components/ConnBanner.svelte'
   import Nav from './components/Nav.svelte'
   import StatusBar from './components/StatusBar.svelte'
@@ -16,6 +17,7 @@
 
   onMount(() => {
     initTheme()
+    initZoom()
     initView()
     init()
   })

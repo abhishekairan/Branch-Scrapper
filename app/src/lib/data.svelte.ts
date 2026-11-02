@@ -27,7 +27,33 @@ import type { DataRecord, DatasetRow, RunRow } from './protocol.ts'
 import { pickOpenPaths, pickSavePath } from './tauri.ts'
 
 export const PAGE = 100
-export const ROW_H = 30
+
+// ================================================================ table display options (per viewer)
+
+export type RowDensity = 'compact' | 'regular' | 'tall'
+/** Row height in CSS px per density. 'tall' fits two lines, so long text cells wrap instead of being cut. */
+export const ROW_HEIGHTS: Record<RowDensity, number> = { compact: 24, regular: 30, tall: 46 }
+export interface TablePrefs {
+  density: RowDensity
+  striped: boolean
+  colLines: boolean
+  /** keep the checkbox + Repository column in view while scrolling sideways */
+  freezeName: boolean
+}
+export const DEFAULT_TABLE_PREFS: TablePrefs = { density: 'regular', striped: true, colLines: false, freezeName: true }
+const TABLE_KEY = 'gs.data.table'
+
+/** Validate whatever came out of storage; unknown or malformed fields fall back to the defaults. */
+export function parseTablePrefs(raw: unknown): TablePrefs {
+  const out: TablePrefs = { ...DEFAULT_TABLE_PREFS }
+  if (!raw || typeof raw !== 'object') return out
+  const o = raw as Record<string, unknown>
+  if (o.density === 'compact' || o.density === 'regular' || o.density === 'tall') out.density = o.density
+  if (typeof o.striped === 'boolean') out.striped = o.striped
+  if (typeof o.colLines === 'boolean') out.colLines = o.colLines
+  if (typeof o.freezeName === 'boolean') out.freezeName = o.freezeName
+  return out
+}
 
 // ================================================================ persisted view settings
 
@@ -59,12 +85,24 @@ export const ui = $state({
   sort: [['stars', 'desc']] as SortSpec,
   /** false = the built-in default (stars, or relevance while a text search is active) */
   sortTouched: false,
+  table: parseTablePrefs(readJson<unknown>(TABLE_KEY, null)),
 })
 
 export function persistUi(): void {
   writeJson('gs.data.sidebar', ui.sidebar)
   writeJson('gs.data.cols', $state.snapshot(ui.columns))
   writeJson('gs.data.widths', $state.snapshot(ui.widths))
+  writeJson(TABLE_KEY, $state.snapshot(ui.table))
+}
+
+export function setTablePrefs(patch: Partial<TablePrefs>): void {
+  Object.assign(ui.table, patch)
+  persistUi()
+}
+
+/** Current row height of the results table. */
+export function rowHeight(): number {
+  return ROW_HEIGHTS[ui.table.density]
 }
 
 export function colWidth(key: string): number {

@@ -2,7 +2,25 @@
 
 All notable changes are documented here. Format loosely follows Keep a Changelog; versions follow SemVer.
 
-## [0.1.2] - Unreleased
+## [0.1.3] - 2026-11-03
+
+### Added
+- **Search with several words: All / Any.** The Data screen's search box has an **All words | Any word** toggle.
+  "All" (default, unchanged behaviour) needs every word; "Any" needs at least one. New optional filter key
+  `text_mode` (`"all"` | `"any"`) in `store/query.py`; anything else is rejected with `filter 'text_mode': ...`.
+  Saved datasets store it only when it is `"any"`, so existing datasets are unchanged.
+- **Table options (Data screen):** row height (Compact / Regular / Tall, where Tall wraps long text to two lines),
+  striped rows, column lines, keep the Repository column in view while scrolling sideways. Per computer
+  (localStorage `gs.data.table`).
+- **More grid options (Browsers screen):** up to 6 columns, spacing (Tight / Normal / Roomy), preview shape
+  (Auto / 16:9 / 16:10 / 4:3) and **Hide finished browsers**.
+- **Interface size** (Settings): 80 % to 175 %, also Ctrl + = / Ctrl + - / Ctrl + 0. Uses the WebView's own zoom,
+  so the live previews and "Take control" clicks scale correctly. Per computer (localStorage `bs.zoom`).
+
+### Changed
+- Capability `core:webview:allow-set-webview-zoom` granted to the main window (only zooms the app's own page).
+
+## [0.1.2] - 2026-11-01
 
 Versions before 0.1.2 cannot update themselves: v0.1.1 users install 0.1.2 by hand once; automatic updates start
 from 0.1.2.

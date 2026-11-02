@@ -169,6 +169,22 @@ export async function setWindowTheme(mode: 'light' | 'dark' | 'system'): Promise
 }
 
 /**
+ * Zoom the app's own page (1 = 100%), like browser zoom: layout, text and pointer coordinates all scale together.
+ * Needs `core:webview:allow-set-webview-zoom`. Returns false outside the shell or when the call failed.
+ */
+export async function setWebviewZoom(factor: number): Promise<boolean> {
+  if (!inTauri) return false
+  try {
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview')
+    await getCurrentWebview().setZoom(factor)
+    return true
+  } catch (e) {
+    console.warn('could not set the zoom level', e)
+    return false
+  }
+}
+
+/**
  * Native "open file" dialog (multi-select). Returns absolute paths, [] if cancelled. Needs the
  * `dialog:allow-open` permission in src-tauri/capabilities; without it the shell rejects the call.
  */

@@ -9,7 +9,7 @@
   let { worker, onexpand }: { worker: WorkerView; onexpand: () => void } = $props()
 </script>
 
-<article class="tile {gridPrefs.density}">
+<article class="tile {gridPrefs.density}" style:--shape={gridPrefs.shape === 'auto' ? null : gridPrefs.shape}>
   <header>
     <span class="wid mono">B{worker.index + 1}</span>
     <WorkerChip {worker} />
@@ -86,7 +86,7 @@
   }
   .stage {
     position: relative;
-    aspect-ratio: var(--preview-ratio);
+    aspect-ratio: var(--shape, var(--preview-ratio));
     border-radius: var(--radius);
     overflow: hidden;
     border: 1px solid var(--border);

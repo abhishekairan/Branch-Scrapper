@@ -10,6 +10,7 @@
     activeChips,
     clearAll,
     clearChip,
+    searchWords,
   } from '../lib/datafilters.ts'
   import type { ExportFormat, ExportScope } from '../lib/datafilters.ts'
   import {
@@ -44,10 +45,14 @@
     syncOnConnect,
     ui,
     unloadDataset,
+    DEFAULT_TABLE_PREFS,
+    setTablePrefs,
   } from '../lib/data.svelte.ts'
+  import type { RowDensity, TablePrefs } from '../lib/data.svelte.ts'
   import { formatCount } from '../lib/format.ts'
 
   const chips = $derived(activeChips(flt))
+  const manyWords = $derived(searchWords(flt.text).length > 1)
   const total = $derived(grid.total)
   const loadedDataset = $derived(lists.datasets.find((d) => d.id === ds.loadedId) ?? null)
   const modified = $derived(datasetModified())
@@ -74,7 +79,7 @@
   })
 
   // ------------------------------------------------------------ popovers
-  type Pop = 'datasets' | 'save' | 'columns' | 'export' | null
+  type Pop = 'datasets' | 'save' | 'columns' | 'table' | 'export' | null
   let pop = $state<Pop>(null)
   function toggle(p: Exclude<Pop, null>): void {
     pop = pop === p ? null : p
@@ -141,6 +146,16 @@
   }
   const colLabel = (k: string): string => COLUMNS.find((c) => c.key === k)?.label ?? k
 
+  // ------------------------------------------------------------ table display
+  const densities: { id: RowDensity; label: string }[] = [
+    { id: 'compact', label: 'Compact' },
+    { id: 'regular', label: 'Regular' },
+    { id: 'tall', label: 'Tall' },
+  ]
+  const tableChanged = $derived(
+    (Object.keys(DEFAULT_TABLE_PREFS) as (keyof TablePrefs)[]).some((k) => ui.table[k] !== DEFAULT_TABLE_PREFS[k]),
+  )
+
   // ------------------------------------------------------------ export
   let expFormat = $state<ExportFormat>('csv')
   function runExport(scope: ExportScope): void {
@@ -175,6 +190,21 @@
         bind:value={flt.text}
       />
       {#if grid.fieldErrors.text}<div class="err pop-err">{grid.fieldErrors.text}</div>{/if}
+    </div>
+    <div
+      class="seg wordmode"
+      role="group"
+      aria-label="How search words combine"
+      title={manyWords ? '' : 'Type several words, then choose whether a result needs all of them or any one'}
+    >
+      <button
+        aria-pressed={flt.textMode === 'all'}
+        title="Results contain every word"
+        onclick={() => (flt.textMode = 'all')}>All words</button>
+      <button
+        aria-pressed={flt.textMode === 'any'}
+        title="Results contain at least one of the words"
+        onclick={() => (flt.textMode = 'any')}>Any word</button>
     </div>
 
     <!-- dataset picker -->
@@ -267,6 +297,29 @@
             {/each}
           </div>
           <div class="pad foot"><button class="btn ghost sm" onclick={resetCols}>Reset columns</button></div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- table display options -->
+    <div class="pop-wrap" data-pop>
+      <button class="btn" onclick={() => toggle('table')} aria-expanded={pop === 'table'} aria-haspopup="dialog">Table</button>
+      {#if pop === 'table'}
+        <div class="popover" role="dialog" aria-label="Table options">
+          <div class="lbl" id="tbl-rows">Row height</div>
+          <div class="seg" role="group" aria-labelledby="tbl-rows">
+            {#each densities as d (d.id)}
+              <button type="button" aria-pressed={ui.table.density === d.id} onclick={() => setTablePrefs({ density: d.id })}>{d.label}</button>
+            {/each}
+          </div>
+          <p class="muted hint">Tall rows show two lines of long text, such as descriptions.</p>
+          <label class="check"><input type="checkbox" checked={ui.table.striped} onchange={(e) => setTablePrefs({ striped: e.currentTarget.checked })} /> Striped rows</label>
+          <label class="check"><input type="checkbox" checked={ui.table.colLines} onchange={(e) => setTablePrefs({ colLines: e.currentTarget.checked })} /> Column lines</label>
+          <label class="check"><input type="checkbox" checked={ui.table.freezeName} onchange={(e) => setTablePrefs({ freezeName: e.currentTarget.checked })} /> Keep Repository column in view</label>
+          <div class="foot row-between">
+            <span class="muted hint">Saved on this computer.</span>
+            <button class="btn ghost sm" disabled={!tableChanged} onclick={() => setTablePrefs({ ...DEFAULT_TABLE_PREFS })}>Reset</button>
+          </div>
         </div>
       {/if}
     </div>
@@ -456,6 +509,12 @@
     position: relative;
     min-width: 160px;
   }
+  .wordmode {
+    flex: none;
+  }
+  .wordmode button {
+    white-space: nowrap;
+  }
   .badge {
     min-width: 16px;
     height: 16px;
@@ -512,6 +571,20 @@
     color: var(--text-3);
     font-size: var(--fs-sm);
     font-weight: 500;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .popover .seg button {
+    flex: 1;
   }
   .small {
     font-size: var(--fs-sm);

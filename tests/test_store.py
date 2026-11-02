@@ -120,6 +120,22 @@ class TestFilters(StoreTestBase):
         self.assertEqual(self.n({"text": "x.dev"}), ["a/js"])
         self.assertEqual(self.n({"text": "nomatchzzz"}), [])
 
+    def test_text_mode(self):
+        # default / "all": every word must match
+        self.assertEqual(self.n({"text": "web cli"}), [])
+        self.assertEqual(self.n({"text": "web cli", "text_mode": "all"}), [])
+        # "any": at least one word
+        self.assertEqual(self.n({"text": "web cli", "text_mode": "any"}), ["a/js", "a/py", "a/py2"])
+        self.assertEqual(self.n({"text": "web nomatchzzz", "text_mode": "any"}), ["a/js"])
+        self.assertEqual(query.fts_query("a b", "any"), '"a"* OR "b"*')
+        self.assertEqual(query.fts_query("a b"), '"a"* "b"*')
+        # mode alone, or with empty text, filters nothing
+        self.assertEqual(len(self.n({"text_mode": "any"})), 4)
+        self.assertEqual(len(self.n({"text": "  ", "text_mode": "any"})), 4)
+        for bad in ("or", "ANY", 1, True, ["any"]):
+            with self.assertRaisesRegex(ValueError, "filter 'text_mode'"):
+                query.search(self.s, {"text": "web", "text_mode": bad})
+
     def test_text_hostile(self):
         for t in ['"', 'foo"bar', '*', 'a*b', '-x', 'NOT', 'a AND', '(', ')', "'; DROP TABLE repos;--",
                   'col:val', '^', '{}', '', '   ', 'web scraper "quoted"', '\\', 'NEAR(']:

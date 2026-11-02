@@ -41,6 +41,8 @@ export const BOOL_LABELS: Record<BoolKey, string> = {
 
 export type Tri = 'any' | 'yes' | 'no'
 export type SetMode = 'any' | 'all' | 'none'
+/** How the words of the search box combine (store/query.py TEXT_MODES): every word, or at least one. */
+export type TextMode = 'all' | 'any'
 
 // ---------------------------------------------------------------- filter form state
 
@@ -60,6 +62,7 @@ export interface DateVal {
 
 export interface FilterState {
   text: string
+  textMode: TextMode
   ranges: Record<RangeKey, RangeVal>
   language: { any: string[]; minPct: string }
   topics: SetVal
@@ -79,6 +82,7 @@ export function defaultFilters(): FilterState {
   for (const k of BOOL_KEYS) tri[k] = 'any'
   return {
     text: '',
+    textMode: 'all',
     ranges,
     language: { any: [], minPct: '' },
     topics: { any: [], all: [], none: [] },
@@ -123,6 +127,8 @@ export function buildFilters(s: FilterState): Record<string, unknown> {
   const f: Record<string, unknown> = {}
   const text = s.text.trim()
   if (text) f.text = text
+  // 'all' is the server default, so it is left out: older saved datasets keep the same signature
+  if (text && s.textMode === 'any') f.text_mode = 'any'
   for (const k of RANGE_KEYS) {
     const r: Record<string, number | string> = {}
     const a = num(s.ranges[k].min)
@@ -170,6 +176,7 @@ export function filtersToState(f: Record<string, unknown> | null | undefined): F
   const s = defaultFilters()
   const src = f ?? {}
   s.text = str(src.text)
+  s.textMode = src.text_mode === 'any' ? 'any' : 'all'
   for (const k of RANGE_KEYS) {
     const r = obj(src[k])
     s.ranges[k] = { min: str(r.min), max: str(r.max) }
@@ -217,6 +224,7 @@ function sortKeys(v: unknown): unknown {
 export function filterOfError(message: string): string | null {
   const m = /filter '([a-z_]+)(?:\.[a-z_]+)?'/.exec(message)
   if (!m) return null
+  if (m[1] === 'text_mode') return 'text' // shown under the search box
   return m[1] === 'last_commit_at' ? 'pushed' : m[1]
 }
 
@@ -247,9 +255,18 @@ function setLabel(label: string, v: SetVal): string {
   return `${label}: ${parts.join('; ')}`
 }
 
+/** The words the search box text is split into; same rule as store/query.py fts_query (`[^\W_]+`). */
+export function searchWords(text: string): string[] {
+  return text.match(/[\p{L}\p{N}\p{M}]+/gu) ?? []
+}
+
 export function activeChips(s: FilterState): Chip[] {
   const out: Chip[] = []
-  if (s.text.trim()) out.push({ id: 'text', label: `Search “${s.text.trim()}”` })
+  const text = s.text.trim()
+  if (text) {
+    const how = searchWords(text).length > 1 ? (s.textMode === 'any' ? 'any of ' : 'all of ') : ''
+    out.push({ id: 'text', label: `Search ${how}“${text}”` })
+  }
   for (const k of RANGE_KEYS) {
     const r = s.ranges[k]
     if (r.min.trim() || r.max.trim()) out.push({ id: `range:${k}`, label: range(RANGE_LABELS[k], r) })

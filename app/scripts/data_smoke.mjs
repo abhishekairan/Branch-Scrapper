@@ -93,6 +93,17 @@ step('datafilters.ts: pure logic')
   ok(JSON.stringify(buildFilters(s)) === '{}' && activeChips(s).length === 0, 'clearAll resets everything')
   s.ranges.stars.min = 'abc'
   ok(buildFilters(s).stars.min === 'abc', 'non-numeric text is passed through for the server to reject')
+  {
+    const t = defaultFilters()
+    t.textMode = 'any'
+    ok(!('text_mode' in buildFilters(t)), 'text_mode is omitted while the search box is empty')
+    t.text = 'react vue'
+    ok(buildFilters(t).text_mode === 'any' && filtersToState(buildFilters(t)).textMode === 'any', 'text_mode any round trips')
+    ok(activeChips(t)[0].label === 'Search any of “react vue”', `any-mode chip: ${activeChips(t)[0].label}`)
+    t.textMode = 'all'
+    ok(!('text_mode' in buildFilters(t)), "text_mode 'all' (the default) is omitted")
+    ok(filterOfError("filter 'text_mode': expected one of all, any") === 'text', 'text_mode errors show at the search box')
+  }
   ok(filterOfError("filter 'stars': expected a number, got 'abc'") === 'stars' &&
     filterOfError("unknown key 'x' in filter 'topics'") === 'topics' &&
     filterOfError("filter 'language.min_pct': expected a number") === 'language' &&
@@ -195,6 +206,13 @@ try {
   st3.text = word.slice(0, Math.max(3, word.length - 1))
   const r3 = await client.call('data.search', { filters: buildFilters(st3), sort: [['relevance', 'asc']], limit: 50, columns: ['full_name'] })
   ok(r3.total >= 1 && r3.rows.some((r) => r.full_name === sample.full_name), `text "${st3.text}" (prefix, relevance sort): ${r3.total} hit(s) incl. ${sample.full_name}`)
+
+  // several words: "all" needs every word (a nonsense word -> nothing), "any" needs one of them
+  st3.text = `${st3.text} zzqxnomatch`
+  const r3all = await client.call('data.search', { filters: buildFilters(st3), limit: 1, columns: ['full_name'] })
+  st3.textMode = 'any'
+  const r3any = await client.call('data.search', { filters: buildFilters(st3), limit: 1, columns: ['full_name'] })
+  ok(r3all.total === 0 && r3any.total === r3.total, `two words: all -> ${r3all.total}, any -> ${r3any.total} (expected 0 and ${r3.total})`)
 
   // language / topics / tech / license built from facets
   const facets = await client.call('data.facets', { limit: 500 })

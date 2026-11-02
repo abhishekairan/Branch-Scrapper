@@ -15,7 +15,10 @@
     takeControl,
   } from '../lib/app.svelte.ts'
   import { formatBytes } from '../lib/format.ts'
-  import { gridPrefs, setLayout, view, type Layout } from '../lib/view.svelte.ts'
+  import { gridPrefs, setGridPrefs, setLayout, view, type Layout } from '../lib/view.svelte.ts'
+
+  const FINISHED = ['done', 'stopped', 'failed']
+  const tiles = $derived(gridPrefs.hideFinished ? run.workers.filter((w) => !FINISHED.includes(w.state)) : run.workers)
 
   onMount(() => {
     view.screenActive = true
@@ -103,9 +106,14 @@
       </div>
     </div>
   {:else if view.layout === 'grid'}
-    <div class="grid {gridPrefs.density}" class:fixed={gridPrefs.columns > 0} style:--cols={gridPrefs.columns || null}>
-      {#each run.workers as w (w.index)}
+    <div class="grid {gridPrefs.density} gap-{gridPrefs.spacing}" class:fixed={gridPrefs.columns > 0} style:--cols={gridPrefs.columns || null}>
+      {#each tiles as w (w.index)}
         <BrowserTile worker={w} onexpand={() => expand(w.index)} />
+      {:else}
+        <p class="muted allhidden">
+          All {run.workers.length} browsers have finished.
+          <button class="btn ghost sm" onclick={() => setGridPrefs({ hideFinished: false })}>Show them</button>
+        </p>
       {/each}
     </div>
   {:else if view.layout === 'list'}
@@ -240,6 +248,19 @@
   }
   .grid.fixed {
     grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  }
+  .grid.gap-tight {
+    gap: 6px;
+  }
+  .grid.gap-roomy {
+    gap: 20px;
+  }
+  .allhidden {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 24px 4px;
   }
 
   .list {

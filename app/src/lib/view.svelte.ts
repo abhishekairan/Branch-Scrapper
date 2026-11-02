@@ -22,22 +22,37 @@ const DEBOUNCE_MS = 200
 
 // ---------------------------------------------------------------- grid options (per viewer, localStorage)
 
-export type GridColumns = 0 | 1 | 2 | 3 | 4 // 0 = auto (responsive)
+export const GRID_COLUMNS = [0, 1, 2, 3, 4, 5, 6] as const
+export type GridColumns = (typeof GRID_COLUMNS)[number] // 0 = auto (responsive)
 export type GridDensity = 'compact' | 'comfortable' | 'large'
+export const GRID_SPACINGS = ['tight', 'normal', 'roomy'] as const
+export type GridSpacing = (typeof GRID_SPACINGS)[number]
+/** 'auto' = the shape that goes with the tile size (compact 16:9, comfortable 16:10, large 3:2) */
+export const GRID_SHAPES = ['auto', '16/9', '16/10', '4/3'] as const
+export type GridShape = (typeof GRID_SHAPES)[number]
 export interface GridPrefs {
   columns: GridColumns
   density: GridDensity
+  spacing: GridSpacing
+  shape: GridShape
   showUrl: boolean
   showStatus: boolean
   showRam: boolean
+  /** hide tiles of workers that are done, stopped or failed */
+  hideFinished: boolean
 }
 export const DEFAULT_GRID_PREFS: GridPrefs = {
   columns: 0,
   density: 'comfortable',
+  spacing: 'normal',
+  shape: 'auto',
   showUrl: true,
   showStatus: true,
   showRam: true,
+  hideFinished: false,
 }
+
+const isOneOf = <T extends string | number>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v)
 const GRID_KEY = 'gs.grid'
 
 /** Validate whatever came out of storage; unknown or malformed fields fall back to the defaults. */
@@ -47,11 +62,14 @@ export function parseGridPrefs(raw: string | null): GridPrefs {
   try {
     const o = JSON.parse(raw) as Record<string, unknown>
     if (o && typeof o === 'object') {
-      if (o.columns === 0 || o.columns === 1 || o.columns === 2 || o.columns === 3 || o.columns === 4) out.columns = o.columns
+      if (isOneOf(GRID_COLUMNS, o.columns)) out.columns = o.columns
       if (o.density === 'compact' || o.density === 'comfortable' || o.density === 'large') out.density = o.density
+      if (isOneOf(GRID_SPACINGS, o.spacing)) out.spacing = o.spacing
+      if (isOneOf(GRID_SHAPES, o.shape)) out.shape = o.shape
       if (typeof o.showUrl === 'boolean') out.showUrl = o.showUrl
       if (typeof o.showStatus === 'boolean') out.showStatus = o.showStatus
       if (typeof o.showRam === 'boolean') out.showRam = o.showRam
+      if (typeof o.hideFinished === 'boolean') out.hideFinished = o.hideFinished
     }
   } catch {
     /* corrupt value: defaults */

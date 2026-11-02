@@ -18,7 +18,8 @@ RANGE_KEYS = ["stars", "forks", "watchers", "contributors", "open_issues",
 BOOL_KEYS = ["archived", "is_fork", "is_template", "has_website"]
 DATE_KEYS = {"created": "created_at", "last_commit_at": "last_commit_at", "pushed": "last_commit_at"}
 SET_KEYS = {"topics": ("repo_topics", "topic"), "tech": ("repo_tech", "tech")}
-ALL_KEYS = (["text", "language", "license", "query", "run_id"] + RANGE_KEYS + BOOL_KEYS
+TEXT_MODES = ("all", "any")  # how the words of `text` combine: every word (AND) or at least one (OR)
+ALL_KEYS = (["text", "text_mode", "language", "license", "query", "run_id"] + RANGE_KEYS + BOOL_KEYS
             + list(DATE_KEYS) + list(SET_KEYS))
 
 # Record fields a caller may request as output columns / sort by.
@@ -66,10 +67,12 @@ def _check_keys(name: str, d: Any, allowed: set[str]) -> dict:
     return d
 
 
-def fts_query(text: str) -> str | None:
-    """Reduce free text to ``"tok1"* "tok2"*`` (implicit AND). Safe for any input."""
+def fts_query(text: str, mode: str = "all") -> str | None:
+    """Reduce free text to ``"tok1"* "tok2"*`` (implicit AND) or, with ``mode="any"``,
+    ``"tok1"* OR "tok2"*``. Tokens are always quoted, so the text never becomes FTS syntax."""
     toks = re.findall(r"[^\W_]+", text, flags=re.UNICODE)
-    return " ".join(f'"{t}"*' for t in toks) or None
+    sep = " OR " if mode == "any" else " "
+    return sep.join(f'"{t}"*' for t in toks) or None
 
 
 def _day(key: str, v: Any) -> date:
@@ -93,13 +96,18 @@ def compile_filters(filters: dict | None) -> Compiled:
     for key in filters:
         if key not in ALL_KEYS:
             raise ValueError(f"unknown filter key {key!r}")
+    mode = filters.get("text_mode")
+    if mode is None:
+        mode = "all"
+    elif mode not in TEXT_MODES:
+        raise ValueError(f"filter 'text_mode': expected one of {', '.join(TEXT_MODES)}")
     for key, val in filters.items():
-        if val is None:
+        if val is None or key == "text_mode":
             continue
         if key == "text":
             if not isinstance(val, str):
                 raise ValueError("filter 'text': expected a string")
-            c.fts = fts_query(val)
+            c.fts = fts_query(val, mode)
         elif key in RANGE_KEYS:
             d = _check_keys(key, val, {"min", "max"})
             if d.get("min") is not None:
